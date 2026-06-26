@@ -72,4 +72,5 @@ _Last updated: 2026-06-17. See `~/projects-status-for-claude.md` for the cross-p
 
 Start with open questions #1 and #4 above, then move toward a written design for Peak Transient List + SALT List logic (full brainstorming pass, not skipped this time since scope is bigger than the refactor was).
 
-
+## H new comments to be sorted
+- Should add a new condition to fill the Mookodi list: if the object is in the Good List (or start with Follow up list) and reaches mag 17 or brighter AND is not TNS classified, add to Mookodi Live list. The Followup list has the advantage of getting cleaned up by us on fridays, but it might not be complete. The Good list would be complete but we would need a new condition to clean up the list. FOR A FIRST GO LET'S STICK TO FOLLOW-UP LIST CHECK + TNS not classified. This is easiest.  
