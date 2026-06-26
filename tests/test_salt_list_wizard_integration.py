@@ -3,13 +3,9 @@ Integration tests for saltListWizard — require a valid ATLAS API config.
 These tests READ from the real API but do NOT write to any list.
 Run with: pytest -m integration
 """
-import os
-import sys
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-import saltListWizard as slw
+import atlas_sao.saltListWizard as slw
 
 
 @pytest.mark.integration

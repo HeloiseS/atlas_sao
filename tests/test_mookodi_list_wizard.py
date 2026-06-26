@@ -1,15 +1,11 @@
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-import mookodiListWizard as mlw
+import atlas_sao.mookodiListWizard as mlw
 
 
-@patch("mookodiListWizard.ac.WriteToCustomList")
+@patch("atlas_sao.mookodiListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_calls_write_once_with_array(mock_write):
     mlw.add_targets_to_list([111, 222], "mookodi_live")
 
@@ -20,14 +16,14 @@ def test_add_targets_to_list_calls_write_once_with_array(mock_write):
     assert kwargs["list_name"] == "mookodi_live"
 
 
-@patch("mookodiListWizard.ac.WriteToCustomList")
+@patch("atlas_sao.mookodiListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_noop_when_empty(mock_write):
     mlw.add_targets_to_list([], "mookodi_live")
 
     mock_write.assert_not_called()
 
 
-@patch("mookodiListWizard.ac.RemoveFromCustomList")
+@patch("atlas_sao.mookodiListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mock_remove):
     mock_remove.return_value = MagicMock()
 
@@ -42,7 +38,7 @@ def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mo
     mock_remove.return_value.get_response.assert_called_once()
 
 
-@patch("mookodiListWizard.ac.RemoveFromCustomList")
+@patch("atlas_sao.mookodiListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_noop_when_empty(mock_remove):
     mlw.remove_targets_from_list([], "mookodi")
 

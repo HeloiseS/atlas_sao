@@ -1,12 +1,8 @@
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-import saltListWizard as slw
+import atlas_sao.saltListWizard as slw
 
 
 def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN'):
@@ -49,7 +45,7 @@ class TestShouldAddToSalt:
         assert slw.should_add_to_salt(make_entry(sherlock_class='SN'), sherlock_exclude='SN') is False
 
 
-@patch("saltListWizard.ac.WriteToCustomList")
+@patch("atlas_sao.saltListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_calls_write_once_with_array(mock_write):
     slw.add_targets_to_list(['1234567890123456789', '9876543210987654321'], 'salt')
 
@@ -60,14 +56,14 @@ def test_add_targets_to_list_calls_write_once_with_array(mock_write):
     assert kwargs['list_name'] == 'salt'
 
 
-@patch("saltListWizard.ac.WriteToCustomList")
+@patch("atlas_sao.saltListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_noop_when_empty(mock_write):
     slw.add_targets_to_list([], 'salt')
 
     mock_write.assert_not_called()
 
 
-@patch("saltListWizard.ac.RemoveFromCustomList")
+@patch("atlas_sao.saltListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mock_remove):
     mock_remove.return_value = MagicMock()
 
@@ -82,7 +78,7 @@ def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mo
     mock_remove.return_value.get_response.assert_called_once()
 
 
-@patch("saltListWizard.ac.RemoveFromCustomList")
+@patch("atlas_sao.saltListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_noop_when_empty(mock_remove):
     slw.remove_targets_from_list([], 'salt')
 
