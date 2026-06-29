@@ -125,11 +125,9 @@ def clean_up():
         for entry in multi_data.response_data:
             try:
                 atlas_id = entry['object']['id']
-                detection_list_id = entry['object']['detection_list_id']
-                
-                too_faint = is_at_peak(entry)
+                too_faint = not is_at_peak(entry)
 
-                if classification is not None or detection_list_id == 0:
+                if too_faint:
                     to_remove.append(atlas_id)
 
             except Exception:

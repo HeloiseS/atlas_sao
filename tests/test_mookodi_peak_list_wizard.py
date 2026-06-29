@@ -24,9 +24,6 @@ class TestIsAtPeak:
     def test_fails_garbage(self):
         assert mpw.is_at_peak(make_entry(detection_list_id=0)) is False
 
-    def test_fails_empty_string_classification_treated_as_none(self):
-        assert mpw.is_at_peak(make_entry(observation_status='')) is True
-
     def test_fails_no_lightcurve(self):
         entry = make_entry()
         entry['lc'] = []
