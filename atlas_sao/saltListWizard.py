@@ -30,7 +30,8 @@ def should_add_to_salt(entry, vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude
     """
     if entry['object']['detection_list_id'] == 0:
         return False
-    if entry['object'].get('vra', 0.0) <= vra_threshold:
+    vra = entry['object'].get('vra')
+    if vra is None or vra <= vra_threshold:
         return False
     if entry['object'].get('sherlockClassification') == sherlock_exclude:
         return False

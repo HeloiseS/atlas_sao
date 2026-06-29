@@ -23,6 +23,11 @@ class TestShouldAddToSalt:
     def test_fails_garbage(self):
         assert slw.should_add_to_salt(make_entry(detection_list_id=0)) is False
 
+    def test_fails_vra_none(self):
+        entry = make_entry()
+        entry['object']['vra'] = None
+        assert slw.should_add_to_salt(entry) is False
+
     def test_fails_vra_too_low(self):
         assert slw.should_add_to_salt(make_entry(vra=8.0)) is False
 
