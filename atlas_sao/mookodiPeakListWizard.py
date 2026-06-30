@@ -158,16 +158,12 @@ def fill_up():
             peak_ids_set = set()
         logging.info(f"{len(peak_ids_set)} objects currently in Mookodi Peak list.")
 
-        # TODO: follow-up list is a temporary proxy for the Good list (detection_list_id=1).
-        # Good list is unbounded and the API has no date filtering on list membership,
-        # making it unscalable. Revisit when the API supports date-filtered list queries.
-        logging.info("Fetching follow-up list...")
-        follow_up = ac.RequestATLASIDsFromWebServerList(list_name='follow_up')
-        follow_up_ids = np.array(follow_up.atlas_id_list_str)
-        logging.info(f"Fetched {len(follow_up_ids)} entries from follow-up list.")
+        logging.info("Fetching active candidates from xtgal_3mnths...")
+        follow_up_ids = np.array([str(id_) for id_ in db.get_active_xtgal_ids()])
+        logging.info(f"Fetched {len(follow_up_ids)} active entries from xtgal_3mnths.")
 
         if len(follow_up_ids) == 0:
-            logging.info("Follow-up list is empty - nothing to evaluate.")
+            logging.info("xtgal_3mnths is empty - nothing to evaluate.")
             return []
 
         candidate_ids = np.array([id_ for id_ in follow_up_ids if id_ not in peak_ids_set])
