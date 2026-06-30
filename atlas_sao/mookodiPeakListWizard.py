@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import atlasapiclient.client as ac
 import logging
+import atlas_sao.db as db
 
 ### CONSTANTS
 # this threshold used as proxy for "at peak" for now, see README
@@ -209,5 +210,8 @@ def fill_up():
 if __name__ == "__main__":
     to_remove = clean_up()
     remove_targets_from_list(to_remove, list_name='mookodi_peak')
+    db.log_removed(to_remove, 'bk_peak')
+
     to_add = fill_up()
     add_targets_to_list(to_add, list_name='mookodi_peak')
+    db.log_added(to_add, 'bk_peak')

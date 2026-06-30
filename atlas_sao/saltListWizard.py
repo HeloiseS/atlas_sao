@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import atlasapiclient.client as ac
 import logging
+import atlas_sao.db as db
 
 ### CONSTANTS
 # NOTE: eventually these may come from CL arguments or config file
@@ -180,5 +181,8 @@ def fill_up(vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude=SALT_SHERLOCK_EXC
 if __name__ == "__main__":
     to_remove = clean_up()
     remove_targets_from_list(to_remove, list_name='salt')
+    db.log_removed(to_remove, 'bk_young_not_fast_track')
+
     to_add = fill_up()
     add_targets_to_list(to_add, list_name='salt')
+    db.log_added(to_add, 'bk_young_not_fast_track')
