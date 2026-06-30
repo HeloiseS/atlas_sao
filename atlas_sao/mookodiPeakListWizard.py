@@ -157,19 +157,20 @@ def fill_up():
             peak_ids_set = set()
         logging.info(f"{len(peak_ids_set)} objects currently in Mookodi Peak list.")
 
-        logging.info("Fetching Mookodi staging list (objectgroupid=2)...")
-        staging = ac.RequestCustomListsTable({'objectgroupid': 2}, get_response=True)
+        # TODO: follow-up list is a temporary proxy for the Good list (detection_list_id=1).
+        # Good list is unbounded and the API has no date filtering on list membership,
+        # making it unscalable. Revisit when the API supports date-filtered list queries.
+        logging.info("Fetching follow-up list...")
+        follow_up = ac.RequestATLASIDsFromWebServerList(list_name='follow_up')
+        follow_up_ids = np.array(follow_up.atlas_id_list_str)
+        logging.info(f"Fetched {len(follow_up_ids)} entries from follow-up list.")
 
-        if not staging.response_data:
-            logging.info("Mookodi staging list is empty - nothing to evaluate.")
+        if len(follow_up_ids) == 0:
+            logging.info("Follow-up list is empty - nothing to evaluate.")
             return []
 
-        staging_df = pd.DataFrame(staging.response_data).drop('object_group_id', axis=1)
-        staging_ids = staging_df.transient_object_id.values.astype(str)
-        logging.info(f"Fetched {len(staging_ids)} entries from staging list.")
-
-        candidate_ids = np.array([id_ for id_ in staging_ids if id_ not in peak_ids_set])
-        logging.info(f"{len(candidate_ids)} staging objects not already in Mookodi Peak list.")
+        candidate_ids = np.array([id_ for id_ in follow_up_ids if id_ not in peak_ids_set])
+        logging.info(f"{len(candidate_ids)} follow-up objects not already in Mookodi Peak list.")
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
@@ -185,7 +186,7 @@ def fill_up():
             multi_data.chunk_get_response_quiet()
             logging.info(f"Received data for {len(multi_data.response_data)} sources.")
         except Exception:
-            logging.exception("Error fetching source data for staging candidates.")
+            logging.exception("Error fetching source data for follow-up candidates.")
             raise
 
         to_add = []
@@ -196,12 +197,12 @@ def fill_up():
                 if is_at_peak(entry):
                     to_add.append(entry['object']['id'])
             except Exception:
-                logging.exception("Error processing staging candidate entry.")
+                logging.exception("Error processing follow-up candidate entry.")
 
         return to_add
 
     except Exception:
-        logging.exception("Failed to process staging list for Mookodi Peak candidates.")
+        logging.exception("Failed to process follow-up list for Mookodi Peak candidates.")
         raise
 
 
