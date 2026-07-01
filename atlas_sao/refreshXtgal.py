@@ -36,7 +36,7 @@ def refresh(n_months=N_MONTHS, db_path=None):
     # and we have preal == 1 and pgal == 0, then we have a Good or Follow up target
     # which is what we want to keep track of. 
     atlas_ids = list({
-        row['transient_object_id_id']
+        row['transient_object_id']
         for row in vra.response_data
         if row['username'] is not None and row['preal'] == 1.0 and row['pgal'] == 0.0
     })
