@@ -1,6 +1,7 @@
 # Claude wrote this for Goal 3 - Mookodi Peak list wizard (2026-06-29)
 # HFS review, added comments and docstrings 2026-06-29
 
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import atlasapiclient.client as ac
@@ -10,6 +11,16 @@ import atlas_sao.db as db
 ### CONSTANTS
 # this threshold used as proxy for "at peak" for now, see README
 MAG_THRESHOLD = 16.0
+# how many days of lightcurve history to request — is_at_peak only needs the last point
+LOOKBACK_DAYS = 60
+MJD_EPOCH = datetime(1858, 11, 17)
+
+
+def _mjd_threshold():
+    """HACK - Not suitable for most MJD calculations because only precise to the day 
+    but avoids adding an astropy dependency to this basic cut we are trying to make
+    """
+    return (datetime.utcnow() - MJD_EPOCH).days - LOOKBACK_DAYS
 
 ### LOGGING SET UP
 logging.basicConfig(
@@ -40,7 +51,7 @@ def is_at_peak(entry):
     if last_mag is None:
         return False
 
-    return last_mag < MAG_THRESHOLD
+    return (last_mag < MAG_THRESHOLD) & (last_mag > 0 )
 
 
 # ################################ #
@@ -113,10 +124,10 @@ def clean_up():
             logging.info("Requesting source data for Mookodi Peak members...")
             multi_data = ac.RequestMultipleSourceData(
                 array_ids=np.array(peak_ids),
-                mjdthreshold=60_500,
-                chunk_size=25
+                mjdthreshold=_mjd_threshold(),
+                chunk_size=50
             )
-            multi_data.chunk_get_response_quiet()
+            multi_data.chunk_get_response()
             logging.info(f"Received data for {len(multi_data.response_data)} sources.")
         except Exception:
             logging.exception("Error fetching source data for Mookodi Peak members.")
@@ -125,7 +136,7 @@ def clean_up():
         to_remove = []
         for entry in multi_data.response_data:
             try:
-                atlas_id = entry['object']['id']
+                atlas_id = str(entry['object']['id'])
                 too_faint = not is_at_peak(entry)
 
                 if too_faint:
@@ -175,14 +186,12 @@ def fill_up():
 
         try:
             logging.info("Requesting source data for staging candidates...")
-            # TODO: Set the mjdthreshold to be within the last X days, which can 
-            # be given as an argument to fill_up (low priority cna be done later)
             multi_data = ac.RequestMultipleSourceData(
                 array_ids=candidate_ids,
-                mjdthreshold=60_500,
-                chunk_size=25
+                mjdthreshold=_mjd_threshold(),
+                chunk_size=50
             )
-            multi_data.chunk_get_response_quiet()
+            multi_data.chunk_get_response()
             logging.info(f"Received data for {len(multi_data.response_data)} sources.")
         except Exception:
             logging.exception("Error fetching source data for follow-up candidates.")
@@ -194,7 +203,7 @@ def fill_up():
                 #  CALLING SPECIAL FUNCTION WHERE ADDING LOGIC LIVES
                 # ################################################## #
                 if is_at_peak(entry):
-                    to_add.append(entry['object']['id'])
+                    to_add.append(str(entry['object']['id']))
             except Exception:
                 logging.exception("Error processing follow-up candidate entry.")
 
@@ -211,5 +220,6 @@ if __name__ == "__main__":
     db.log_removed(to_remove, 'bk_peak')
 
     to_add = fill_up()
+    logging.info(f"to_add IDs and types: {[(id_, type(id_)) for id_ in to_add]}")
     add_targets_to_list(to_add, list_name='mookodi_peak')
     db.log_added(to_add, 'bk_peak')
