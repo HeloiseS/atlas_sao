@@ -5,13 +5,14 @@ import numpy as np
 import atlas_sao.saltListWizard as slw
 
 
-def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN'):
+def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN', dec=-30.0):
     return {
         'object': {
             'id': '1234567890123456789',
             'detection_list_id': detection_list_id,
             'vra': vra,
             'sherlockClassification': sherlock_class,
+            'dec': dec,
         }
     }
 
@@ -33,6 +34,10 @@ class TestShouldAddToSalt:
 
     def test_fails_vra_at_threshold(self):
         assert slw.should_add_to_salt(make_entry(vra=9.0)) is False
+
+    def test_fails_too_far_north(self):
+        assert slw.should_add_to_salt(make_entry(dec=10.0)) is False
+        assert slw.should_add_to_salt(make_entry(dec=45.0)) is False
 
     def test_fails_orphan(self):
         assert slw.should_add_to_salt(make_entry(sherlock_class='ORPHAN')) is False

@@ -11,16 +11,16 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-N_MONTHS = 3
+N_WEEKS = 6
 
 
-def refresh(n_months=N_MONTHS, db_path=None):
+def refresh(n_weeks=N_WEEKS, db_path=None):
     """
     Checks the VRA Scores table to add new alerts we don't have yet and deactivates old ones
     """
 
-    # Cutoff data calculated approximately by doing 30days * N months. 
-    cutoff = (datetime.now() - timedelta(days=30 * n_months)).strftime('%Y-%m-%d')
+    # Cutoff data 
+    cutoff = (datetime.now() - timedelta(days=7 * n_weeks)).strftime('%Y-%m-%d')
 
     ### Get VRA Scores table 
     logging.info(f"Fetching VRA scores since {cutoff}...")

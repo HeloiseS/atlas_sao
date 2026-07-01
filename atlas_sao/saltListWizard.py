@@ -31,6 +31,9 @@ def should_add_to_salt(entry, vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude
     """
     if entry['object']['detection_list_id'] == 0:
         return False
+    if entry['object']['dec'] >= 10.0:
+        # For SALT we don't want anything with declination +10 or above.
+        return False
     vra = entry['object'].get('vra')
     if vra is None or vra <= vra_threshold:
         return False
