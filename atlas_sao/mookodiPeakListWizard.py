@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import atlasapiclient.client as ac
 import logging
+import atlas_sao.db as db
 
 ### CONSTANTS
 # this threshold used as proxy for "at peak" for now, see README
@@ -157,19 +158,16 @@ def fill_up():
             peak_ids_set = set()
         logging.info(f"{len(peak_ids_set)} objects currently in Mookodi Peak list.")
 
-        logging.info("Fetching Mookodi staging list (objectgroupid=2)...")
-        staging = ac.RequestCustomListsTable({'objectgroupid': 2}, get_response=True)
+        logging.info("Fetching active candidates from xtgal_3mnths...")
+        follow_up_ids = np.array([str(id_) for id_ in db.get_active_xtgal_ids()])
+        logging.info(f"Fetched {len(follow_up_ids)} active entries from xtgal_3mnths.")
 
-        if not staging.response_data:
-            logging.info("Mookodi staging list is empty - nothing to evaluate.")
+        if len(follow_up_ids) == 0:
+            logging.info("xtgal_3mnths is empty - nothing to evaluate.")
             return []
 
-        staging_df = pd.DataFrame(staging.response_data).drop('object_group_id', axis=1)
-        staging_ids = staging_df.transient_object_id.values.astype(str)
-        logging.info(f"Fetched {len(staging_ids)} entries from staging list.")
-
-        candidate_ids = np.array([id_ for id_ in staging_ids if id_ not in peak_ids_set])
-        logging.info(f"{len(candidate_ids)} staging objects not already in Mookodi Peak list.")
+        candidate_ids = np.array([id_ for id_ in follow_up_ids if id_ not in peak_ids_set])
+        logging.info(f"{len(candidate_ids)} follow-up objects not already in Mookodi Peak list.")
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
@@ -177,6 +175,8 @@ def fill_up():
 
         try:
             logging.info("Requesting source data for staging candidates...")
+            # TODO: Set the mjdthreshold to be within the last X days, which can 
+            # be given as an argument to fill_up (low priority cna be done later)
             multi_data = ac.RequestMultipleSourceData(
                 array_ids=candidate_ids,
                 mjdthreshold=60_500,
@@ -185,7 +185,7 @@ def fill_up():
             multi_data.chunk_get_response_quiet()
             logging.info(f"Received data for {len(multi_data.response_data)} sources.")
         except Exception:
-            logging.exception("Error fetching source data for staging candidates.")
+            logging.exception("Error fetching source data for follow-up candidates.")
             raise
 
         to_add = []
@@ -196,17 +196,20 @@ def fill_up():
                 if is_at_peak(entry):
                     to_add.append(entry['object']['id'])
             except Exception:
-                logging.exception("Error processing staging candidate entry.")
+                logging.exception("Error processing follow-up candidate entry.")
 
         return to_add
 
     except Exception:
-        logging.exception("Failed to process staging list for Mookodi Peak candidates.")
+        logging.exception("Failed to process follow-up list for Mookodi Peak candidates.")
         raise
 
 
 if __name__ == "__main__":
     to_remove = clean_up()
     remove_targets_from_list(to_remove, list_name='mookodi_peak')
+    db.log_removed(to_remove, 'bk_peak')
+
     to_add = fill_up()
     add_targets_to_list(to_add, list_name='mookodi_peak')
+    db.log_added(to_add, 'bk_peak')

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import atlasapiclient.client as ac
 import logging
+import atlas_sao.db as db
 
 MAG_THRESHOLD = 17.0
 
@@ -167,7 +168,11 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
 if __name__ == "__main__":
     to_remove_live = clean_up(objectgroupid=16, list_name='mookodi_live')
     remove_targets_from_list(to_remove_live, list_name='mookodi_live')
+    db.log_removed(to_remove_live, 'bk_young_fast_track')
+
     to_remove_base = clean_up(objectgroupid=2, list_name='mookodi')
     remove_targets_from_list(to_remove_base, list_name='mookodi')
+
     to_add = fill_up()
     add_targets_to_list(to_add, list_name='mookodi_live')
+    db.log_added(to_add, 'bk_young_fast_track')
