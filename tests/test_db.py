@@ -87,27 +87,17 @@ class TestUpsertXtgal:
         assert count == 0
 
     def test_inserts_new_row(self, db_path):
-        db.upsert_xtgal([('1111111111111111111', 9.5)], db_path=db_path)
+        db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
         conn = sqlite3.connect(db_path)
-        row = conn.execute('SELECT atlas_id, vra_score_when_added, vra_score_now, active FROM xtgal_3mnths').fetchone()
+        row = conn.execute('SELECT atlas_id, active, date_added FROM xtgal_3mnths').fetchone()
         conn.close()
         assert row[0] == 1111111111111111111
-        assert row[1] == 9.5
-        assert row[2] == 9.5
-        assert row[3] == 1
-
-    def test_updates_vra_score_now_on_second_call(self, db_path):
-        db.upsert_xtgal([('1111111111111111111', 9.5)], db_path=db_path)
-        db.upsert_xtgal([('1111111111111111111', 8.0)], db_path=db_path)
-        conn = sqlite3.connect(db_path)
-        row = conn.execute('SELECT vra_score_when_added, vra_score_now FROM xtgal_3mnths').fetchone()
-        conn.close()
-        assert row[0] == 9.5
-        assert row[1] == 8.0
+        assert row[1] == 1
+        assert row[2] is not None
 
     def test_does_not_create_duplicate(self, db_path):
-        db.upsert_xtgal([('1111111111111111111', 9.5)], db_path=db_path)
-        db.upsert_xtgal([('1111111111111111111', 8.0)], db_path=db_path)
+        db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
+        db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
         conn = sqlite3.connect(db_path)
         count = conn.execute('SELECT COUNT(*) FROM xtgal_3mnths').fetchone()[0]
         conn.close()
@@ -120,7 +110,7 @@ class TestDeactivateBefore:
         conn.execute("INSERT INTO xtgal_3mnths (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-01-01', 1)")
         conn.commit()
         conn.close()
-        db.deactivate_before('2026-06-01', db_path=db_path)
+        db.deactivate_old_alerts('2026-06-01', db_path=db_path)
         conn = sqlite3.connect(db_path)
         active = conn.execute('SELECT active FROM xtgal_3mnths').fetchone()[0]
         conn.close()
@@ -131,7 +121,7 @@ class TestDeactivateBefore:
         conn.execute("INSERT INTO xtgal_3mnths (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-07-01', 1)")
         conn.commit()
         conn.close()
-        db.deactivate_before('2026-06-01', db_path=db_path)
+        db.deactivate_old_alerts('2026-06-01', db_path=db_path)
         conn = sqlite3.connect(db_path)
         active = conn.execute('SELECT active FROM xtgal_3mnths').fetchone()[0]
         conn.close()

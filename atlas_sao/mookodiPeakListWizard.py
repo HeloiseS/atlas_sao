@@ -175,6 +175,8 @@ def fill_up():
 
         try:
             logging.info("Requesting source data for staging candidates...")
+            # TODO: Set the mjdthreshold to be within the last X days, which can 
+            # be given as an argument to fill_up (low priority cna be done later)
             multi_data = ac.RequestMultipleSourceData(
                 array_ids=candidate_ids,
                 mjdthreshold=60_500,
