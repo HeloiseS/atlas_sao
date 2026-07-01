@@ -9,17 +9,6 @@ For now we will use a dumb placeholder: brighter than 16 mag. Why? because for m
 ## SALT
 TBW
 
-## Code review checklist 
-
-HFS Review summary:
-
-- [x] `atlas_sao/db.py` - commented and requested to parse connections instead of creating them, but only because i am concerned about leaving connections open. We can discuss this decision. 
-- [x] `atlas_sao/refreshXtgal.py` - refactor needed on the logic to upsert. Details in comments; ask if you need a better description. 
-- Related: I removed VRA_SCORE_WHEN_ADDED FLOAT, VRA_SCORE_NOW FLOAT from schema. I realised it was unnecessary for that table. Database and code NOT UPDATED YET to reflect that change. 
-- [x] `atlas_sao/mookodiPeakListWizard.py` - all good
-- [x] `atlas_sao/mookodiListWizard.py` - all good
-- [x] `atlas_sao/saltListWizard.py` - all good
-
 
 
 ## Db schema draft
