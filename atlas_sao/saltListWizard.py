@@ -53,11 +53,7 @@ def remove_targets_from_list(array_ids, list_name: str, chunk_size: int = 25):
     if len(array_ids) == 0:
         return
     logging.info(f"Removing {len(array_ids)} targets from '{list_name}'...")
-    remover = ac.RemoveFromCustomList(array_ids=np.array(array_ids), list_name=list_name, chunk_size=chunk_size)
-    # Claude wrote this for issue #42 (2026-06-17): RemoveFromCustomList only
-    # auto-fires when it had to chunk; call explicitly for small batches.
-    if len(array_ids) <= chunk_size:
-        remover.get_response()
+    ac.RemoveFromCustomList(array_ids=np.array(array_ids), list_name=list_name, chunk_size=chunk_size)
 
 
 def clean_up():
