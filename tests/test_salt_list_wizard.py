@@ -92,3 +92,23 @@ def test_remove_targets_from_list_noop_when_empty(mock_remove):
     slw.remove_targets_from_list([], 'salt')
 
     mock_remove.assert_not_called()
+
+
+@patch("atlas_sao.saltListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.saltListWizard.ac.RequestATLASIDsFromWebServerList")
+@patch("atlas_sao.saltListWizard.ac.RequestCustomListsTable")
+def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_eyeball, mock_multi):
+    mock_table.return_value.response_data = []
+
+    eyeball_mock = MagicMock()
+    eyeball_mock.atlas_id_list_str = ['1234567890123456789']
+    mock_eyeball.return_value = eyeball_mock
+
+    source_mock = MagicMock()
+    source_mock.response_data = [make_entry(vra=9.5)]
+    mock_multi.return_value = source_mock
+
+    ids, vra_scores = slw.fill_up()
+
+    assert ids == ['1234567890123456789']
+    assert vra_scores == {'1234567890123456789': 9.5}

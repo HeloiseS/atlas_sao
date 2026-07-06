@@ -124,7 +124,7 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
 
         if not staging.response_data:
             logging.info("Mookodi staging list is empty - nothing to evaluate.")
-            return []
+            return [], {}
 
         staging_df = pd.DataFrame(staging.response_data).drop('object_group_id', axis=1)
         staging_ids = staging_df.transient_object_id.values.astype(str)
@@ -135,7 +135,7 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
-            return []
+            return [], {}
 
         try:
             logging.info("Requesting source data for staging candidates...")
@@ -151,14 +151,17 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
             raise
 
         to_add = []
+        vra_scores = {}
         for entry in multi_data.response_data:
             try:
                 if should_add_to_mookodi_live(entry, mag_threshold):
-                    to_add.append(entry['object']['id'])
+                    atlas_id = entry['object']['id']
+                    to_add.append(atlas_id)
+                    vra_scores[str(atlas_id)] = entry['object'].get('vra')
             except Exception:
                 logging.exception("Error processing staging candidate entry.")
 
-        return to_add
+        return to_add, vra_scores
 
     except Exception:
         logging.exception("Failed to process staging list for mookodi_live candidates.")
@@ -173,6 +176,6 @@ if __name__ == "__main__":
     to_remove_base = clean_up(objectgroupid=2, list_name='mookodi')
     remove_targets_from_list(to_remove_base, list_name='mookodi')
 
-    to_add = fill_up()
+    to_add, vra_scores = fill_up()
     add_targets_to_list(to_add, list_name='mookodi_live')
-    db.log_added(to_add, 'bk_young_fast_track')
+    db.log_added(to_add, 'bk_young_fast_track', vra_scores=vra_scores)

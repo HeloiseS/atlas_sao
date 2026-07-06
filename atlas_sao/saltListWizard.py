@@ -145,7 +145,7 @@ def fill_up(vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude=SALT_SHERLOCK_EXC
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
-            return []
+            return [], {}
 
         try:
             logging.info("Requesting source data for eyeball candidates...")
@@ -161,16 +161,19 @@ def fill_up(vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude=SALT_SHERLOCK_EXC
             raise
 
         to_add = []
+        vra_scores = {}
         for entry in multi_data.response_data:
             try:
                 #  CALLING SPECIAL FUNCTION WHERE ADDING LOGIC LIVES
                 # ################################################## #
                 if should_add_to_salt(entry, vra_threshold, sherlock_exclude):
-                    to_add.append(entry['object']['id'])
+                    atlas_id = entry['object']['id']
+                    to_add.append(atlas_id)
+                    vra_scores[str(atlas_id)] = entry['object'].get('vra')
             except Exception:
                 logging.exception("Error processing eyeball candidate entry.")
 
-        return to_add
+        return to_add, vra_scores
 
     except Exception:
         logging.exception("Failed to process eyeball list for SALT candidates.")
@@ -182,6 +185,6 @@ if __name__ == "__main__":
     remove_targets_from_list(to_remove, list_name='salt')
     db.log_removed(to_remove, 'bk_young_not_fast_track')
 
-    to_add = fill_up()
+    to_add, vra_scores = fill_up()
     add_targets_to_list(to_add, list_name='salt')
-    db.log_added(to_add, 'bk_young_not_fast_track')
+    db.log_added(to_add, 'bk_young_not_fast_track', vra_scores=vra_scores)

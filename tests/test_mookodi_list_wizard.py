@@ -5,13 +5,14 @@ import numpy as np
 import atlas_sao.mookodiListWizard as mlw
 
 
-def make_entry(detection_list_id=4, observation_status=None, last_mag: float | None = 15.5):
+def make_entry(detection_list_id=4, observation_status=None, last_mag: float | None = 15.5, vra=9.2):
     lc = [{'mag': last_mag}] if last_mag is not None else []
     return {
         'object': {
             'id': '1234567890123456789',
             'detection_list_id': detection_list_id,
             'observation_status': observation_status,
+            'vra': vra,
         },
         'lc': lc,
     }
@@ -95,3 +96,22 @@ def test_remove_targets_from_list_noop_when_empty(mock_remove):
     mlw.remove_targets_from_list([], "mookodi")
 
     mock_remove.assert_not_called()
+
+
+@patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
+def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_multi):
+    live_mock = MagicMock()
+    live_mock.response_data = []
+    staging_mock = MagicMock()
+    staging_mock.response_data = [{'transient_object_id': '1234567890123456789', 'object_group_id': 2}]
+    mock_table.side_effect = [live_mock, staging_mock]
+
+    source_mock = MagicMock()
+    source_mock.response_data = [make_entry(last_mag=15.5, vra=9.2)]
+    mock_multi.return_value = source_mock
+
+    ids, vra_scores = mlw.fill_up()
+
+    assert ids == ['1234567890123456789']
+    assert vra_scores == {'1234567890123456789': 9.2}
