@@ -18,8 +18,9 @@ class TestCleanUp:
 
 @pytest.mark.integration
 class TestFillUp:
-    def test_returns_list(self):
-        result = slw.fill_up()
-        assert isinstance(result, list)
+    def test_returns_ids_and_vra_scores(self):
+        ids, vra_scores = slw.fill_up()
+        assert isinstance(ids, list)
+        assert isinstance(vra_scores, dict)
 
 

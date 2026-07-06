@@ -175,14 +175,14 @@ def fill_up():
 
         if len(follow_up_ids) == 0:
             logging.info("xtgal_3mnths is empty - nothing to evaluate.")
-            return []
+            return [], {}
 
         candidate_ids = np.array([id_ for id_ in follow_up_ids if id_ not in peak_ids_set])
         logging.info(f"{len(candidate_ids)} follow-up objects not already in Mookodi Peak list.")
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
-            return []
+            return [], {}
 
         try:
             logging.info("Requesting source data for staging candidates...")
@@ -198,16 +198,19 @@ def fill_up():
             raise
 
         to_add = []
+        vra_scores = {}
         for entry in multi_data.response_data:
             try:
                 #  CALLING SPECIAL FUNCTION WHERE ADDING LOGIC LIVES
                 # ################################################## #
                 if is_at_peak(entry):
-                    to_add.append(str(entry['object']['id']))
+                    atlas_id = str(entry['object']['id'])
+                    to_add.append(atlas_id)
+                    vra_scores[atlas_id] = entry['object'].get('vra')
             except Exception:
                 logging.exception("Error processing follow-up candidate entry.")
 
-        return to_add
+        return to_add, vra_scores
 
     except Exception:
         logging.exception("Failed to process follow-up list for Mookodi Peak candidates.")
@@ -219,7 +222,7 @@ if __name__ == "__main__":
     remove_targets_from_list(to_remove, list_name='mookodi_peak')
     db.log_removed(to_remove, 'bk_peak')
 
-    to_add = fill_up()
+    to_add, vra_scores = fill_up()
     logging.info(f"to_add IDs and types: {[(id_, type(id_)) for id_ in to_add]}")
     add_targets_to_list(to_add, list_name='mookodi_peak')
-    db.log_added(to_add, 'bk_peak')
+    db.log_added(to_add, 'bk_peak', vra_scores=vra_scores)
