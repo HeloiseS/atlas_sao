@@ -76,6 +76,22 @@ def test_add_targets_to_list_noop_when_empty(mock_write):
     mock_write.assert_not_called()
 
 
+@patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
+def test_clean_up_removes_attic_members(mock_table, mock_multi):
+    mock_table.return_value.response_data = [
+        {'transient_object_id': '1234567890123456789', 'object_group_id': 2}
+    ]
+
+    source_mock = MagicMock()
+    source_mock.response_data = [make_entry(detection_list_id=5)]
+    mock_multi.return_value = source_mock
+
+    to_remove = mlw.clean_up(objectgroupid=2, list_name='mookodi')
+
+    assert to_remove == ['1234567890123456789']
+
+
 @patch("atlas_sao.mookodiListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mock_remove):
     mock_remove.return_value = MagicMock()

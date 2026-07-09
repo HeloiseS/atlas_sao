@@ -99,7 +99,7 @@ def clean_up():
                 if classification == '':
                     classification = None
 
-                if classification is not None or detection_list_id == 0:
+                if classification is not None or detection_list_id in (0, 5):
                     to_remove.append(atlas_id)
 
             except Exception:
