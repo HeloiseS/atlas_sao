@@ -1,5 +1,8 @@
 CLAUDE.md
 
+# flock lockfiles created at runtime by bash_prod/*.sh
+bash_prod/.locks/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
