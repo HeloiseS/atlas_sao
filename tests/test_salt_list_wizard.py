@@ -128,3 +128,8 @@ def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_eyeball, mock_multi
 
     assert ids == ['1234567890123456789']
     assert vra_scores == {'1234567890123456789': 9.5}
+
+    _, kwargs = mock_eyeball.call_args
+    assert kwargs['list_name'] == 'eyeball'
+    assert kwargs['vra_gte'] == slw.SALT_VRA_THRESHOLD
+    assert kwargs['dec_lte'] == slw.SALT_DEC_MAX
