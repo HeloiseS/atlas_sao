@@ -11,6 +11,7 @@ import atlas_sao.db as db
 # NOTE: eventually these may come from CL arguments or config file
 SALT_VRA_THRESHOLD = 9.0
 SALT_SHERLOCK_EXCLUDE = 'ORPHAN'
+SALT_DEC_MAX = 10.0
 
 ### LOGGING SET UP
 logging.basicConfig(
@@ -31,7 +32,7 @@ def should_add_to_salt(entry, vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude
     """
     if entry['object']['detection_list_id'] == 0:
         return False
-    if entry['object']['dec'] >= 10.0:
+    if entry['object']['dec'] >= SALT_DEC_MAX:
         # For SALT we don't want anything with declination +10 or above.
         return False
     vra = entry['object'].get('vra')
@@ -135,8 +136,12 @@ def fill_up(vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude=SALT_SHERLOCK_EXC
             salt_ids_set = set()
         logging.info(f"{len(salt_ids_set)} objects currently in SALT list.")
 
-        logging.info("Fetching eyeball list...")
-        eyeball = ac.RequestATLASIDsFromWebServerList(list_name='eyeball')
+        logging.info("Fetching eyeball list (pre-filtered by VRA/Dec at the API level)...")
+        eyeball = ac.RequestATLASIDsFromWebServerList(
+            list_name='eyeball',
+            vra_gte=vra_threshold,
+            dec_lte=SALT_DEC_MAX,
+        )
         eyeball_ids = np.array(eyeball.atlas_id_list_str)
         logging.info(f"Fetched {len(eyeball_ids)} entries from eyeball list.")
 
