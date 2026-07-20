@@ -94,7 +94,7 @@ def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mo
     assert isinstance(kwargs['array_ids'], np.ndarray)
     assert kwargs['list_name'] == 'mookodi_peak'
     assert kwargs['chunk_size'] == 25
-    mock_remove.return_value.get_response.assert_called_once()
+    mock_remove.return_value.get_response.assert_not_called()
 
 
 @patch("atlas_sao.mookodiPeakListWizard.ac.RemoveFromCustomList")
