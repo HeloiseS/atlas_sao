@@ -7,7 +7,7 @@ Last Updated: 2026-07-08
 There are currently 3 lists of interest:
 - **Mookodi Live List (Custom List 16)** | **[Working]** : Young Transients within 100 Mpc that have not yet been classified, with VRA Score > 8.5
 - **Salt List (Custom List 14)** | **[MVP]**: Young Transients that have not yet been classified, with VRA Score > 9.0 and that are not Orphans. 
-- **Mookodi Peak Transients (Custom List 17)** | **[Dev]**: Transients "at peak". Current definition of "at peak" is magnitude brighter than 16. This was for devs purposes and will be refined. 
+- **Mookodi Peak Transients (Custom List 17)** | **[Dev]**: Transients "at peak". Current definition of "at peak" is: the last 3 lc points are all real detections brighter than 16.9 mag (allowing for their 1-sigma error bar). This was for devs purposes and will be refined. 
 
 ---
 
@@ -81,7 +81,9 @@ Custom List: 17
 - Already classified as good
 - Mag Threshold (will need better "at peak" descriptor)
 
-For now we will use a dumb placeholder: **brighter than 16 mag**. Why? because for mookodi we usually target things within 100 Mpc. that's distance modulus 35, so absolute mag 19. That's the peak of a Ia SN at 100Mpc. So we won't be filling up the list with things that are too distant. Also 16th and brighter is a really good SNR for mookodi, so we'll only be targetting bright things, nearby, most likely near peak. And those that are so nearby that they are not near peak will be much less numerous because the volume is much smaller. So this is a great place to start using the list, then I'll see what targets end up "contaminating" the list and I'll refine later.
+For now we will use a dumb placeholder: **brighter than 16.9 mag**. Why? because for mookodi we usually target things within 100 Mpc. that's distance modulus 35, so absolute mag 19. That's the peak of a Ia SN at 100Mpc. So we won't be filling up the list with things that are too distant. Also 16.9th and brighter is a really good SNR for mookodi, so we'll only be targetting bright things, nearby, most likely near peak. And those that are so nearby that they are not near peak will be much less numerous because the volume is much smaller. So this is a great place to start using the list, then I'll see what targets end up "contaminating" the list and I'll refine later.
+
+**2026-07-20 update**: 16 mag was too restrictive (missed genuine near-peak objects between 16 and 16.9), and checking only the single latest lc point wasn't restrictive enough — a single bogus bright detection could get an object onto the list. Fixed both: threshold moved to 16.9 mag, and now we require the **last 3** lc points to each be real detections (not non-detections) that are brighter than 16.9 allowing for their 1-sigma error bar (`mag - magerr < 16.9`). If the last 3 points are non-detections, or any of them fails that check, the object is removed from the list (or never added in the first place). See `is_at_peak()` in `mookodiPeakListWizard.py`.
 
 
 **Inputs**
