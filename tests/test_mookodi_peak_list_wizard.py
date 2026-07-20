@@ -5,8 +5,11 @@ import numpy as np
 import atlas_sao.mookodiPeakListWizard as mpw
 
 
-def make_entry(detection_list_id=4, observation_status=None, last_mag: float | None = 15.5, vra=9.2):
-    lc = [{'mag': last_mag}] if last_mag is not None else []
+def make_entry(detection_list_id=4, observation_status=None, points=((15.5, 0.1),) * 3, vra=9.2):
+    lc = [
+        {'mag': mag, 'magerr': magerr, 'mjd': 60000 + i}
+        for i, (mag, magerr) in enumerate(points)
+    ] if points is not None else []
     return {
         'object': {
             'id': '1234567890123456789',
@@ -35,17 +38,29 @@ class TestIsAtPeak:
         del entry['lc']
         assert mpw.is_at_peak(entry) is False
 
-    def test_fails_no_mag_in_last_point(self):
-        assert mpw.is_at_peak(make_entry(last_mag=None)) is False
+    def test_fails_fewer_than_three_points(self):
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1)))) is False
+
+    def test_fails_no_mag_in_recent_point(self):
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1), (None, 0.1)))) is False
+
+    def test_fails_non_detection_in_recent_points(self):
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1), (-18.8, 0.1)))) is False
 
     def test_fails_too_faint(self):
-        assert mpw.is_at_peak(make_entry(last_mag=16.5)) is False
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1), (20.0, 0.1)))) is False
 
     def test_fails_exactly_at_threshold(self):
-        assert mpw.is_at_peak(make_entry(last_mag=16.0)) is False
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1), (17.0, 0.1)))) is False
 
-    def test_passes_just_brighter_than_threshold(self):
-        assert mpw.is_at_peak(make_entry(last_mag=15.99)) is True
+    def test_passes_just_brighter_than_threshold_with_error_margin(self):
+        assert mpw.is_at_peak(make_entry(points=((15.5, 0.1), (15.5, 0.1), (17.5, 1.0)))) is True
+
+    def test_fails_bogus_bright_single_point_flanked_by_faint(self):
+        assert mpw.is_at_peak(make_entry(points=((15.0, 0.1), (17.5, 0.1), (15.0, 0.1)))) is False
+
+    def test_only_last_three_points_considered_regardless_of_older_faint_history(self):
+        assert mpw.is_at_peak(make_entry(points=((20.0, 0.1), (15.5, 0.1), (15.5, 0.1), (15.5, 0.1)))) is True
 
 
 
@@ -97,7 +112,7 @@ def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_db, mock_multi):
     mock_db.return_value = ['1234567890123456789']
 
     source_mock = MagicMock()
-    source_mock.response_data = [make_entry(last_mag=15.5, vra=9.2)]
+    source_mock.response_data = [make_entry(vra=9.2)]
     mock_multi.return_value = source_mock
 
     ids, vra_scores = mpw.fill_up()

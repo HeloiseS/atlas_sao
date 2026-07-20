@@ -10,8 +10,11 @@ import atlas_sao.db as db
 
 ### CONSTANTS
 # this threshold used as proxy for "at peak" for now, see README
-MAG_THRESHOLD = 16.0
-# how many days of lightcurve history to request — is_at_peak only needs the last point
+MAG_THRESHOLD = 16.9
+# require this many of the most recent lc points to independently pass the
+# brightness cut, so a single bogus bright detection can't get an object onto the list
+N_RECENT_POINTS = 3
+# how many days of lightcurve history to request — is_at_peak needs the last N_RECENT_POINTS
 LOOKBACK_DAYS = 60
 MJD_EPOCH = datetime(1858, 11, 17)
 
@@ -34,7 +37,12 @@ logging.basicConfig(
 ##########################################
 def is_at_peak(entry):
     """ Function that contains the logic that decides if a lightcurve is at peak
-    Here there is no constraint that the object must be unclassified. 
+    Here there is no constraint that the object must be unclassified.
+
+    The last N_RECENT_POINTS lc points must each be real detections
+    (mag > 0) that are brighter than MAG_THRESHOLD even allowing for their
+    1-sigma error bar (mag - magerr < MAG_THRESHOLD). Non-detections or
+    fewer than N_RECENT_POINTS points in the lc fail this check.
 
     Return
     ------
@@ -44,14 +52,20 @@ def is_at_peak(entry):
         return False
 
     lc = entry.get('lc', [])
-    if not lc:
+    if len(lc) < N_RECENT_POINTS:
         return False
 
-    last_mag = lc[-1].get('mag')
-    if last_mag is None:
-        return False
+    recent_points = sorted(lc, key=lambda point: point['mjd'])[-N_RECENT_POINTS:]
 
-    return (last_mag < MAG_THRESHOLD) & (last_mag > 0 )
+    for point in recent_points:
+        mag = point.get('mag')
+        magerr = point.get('magerr')
+        if mag is None or magerr is None or mag <= 0:
+            return False
+        if not (mag - magerr < MAG_THRESHOLD):
+            return False
+
+    return True
 
 
 # ################################ #
