@@ -85,6 +85,8 @@ For now we will use a dumb placeholder: **brighter than 16.9 mag**. Why? because
 
 **2026-07-20 update**: 16 mag was too restrictive (missed genuine near-peak objects between 16 and 16.9), and checking only the single latest lc point wasn't restrictive enough — a single bogus bright detection could get an object onto the list. Fixed both: threshold moved to 16.9 mag, and now we require the **last 3** lc points to each be real detections (not non-detections) that are brighter than 16.9 allowing for their 1-sigma error bar (`mag - magerr < 16.9`). If the last 3 points are non-detections, or any of them fails that check, the object is removed from the list (or never added in the first place). See `is_at_peak()` in `mookodiPeakListWizard.py`.
 
+**2026-07-21 update ([#27](https://github.com/HeloiseS/atlas_sao/issues/27))**: the "last 3 points" check above only looked at `lc`, but non-detections don't show up there — they live in a separate `lcnondets` field (limiting mag only, no mag/magerr). So an object with old bright `lc` points and thousands of recent non-detections in `lcnondets` was staying on the list forever, since those non-detections were invisible to the check. Fixed by merging `lc` and `lcnondets` on mjd before taking the last 3 points, so a recent non-detection now correctly counts as one of the most recent visits.
+
 
 **Inputs**
 - Objects that have been classified as good in the last X weeks (i.e are set as Active in `xtgal_3mnths` table.)

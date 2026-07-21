@@ -5,11 +5,13 @@ import numpy as np
 import atlas_sao.mookodiPeakListWizard as mpw
 
 
-def make_entry(detection_list_id=4, observation_status=None, points=((15.5, 0.1),) * 3, vra=9.2):
+def make_entry(detection_list_id=4, observation_status=None, points=((15.5, 0.1),) * 3, vra=9.2,
+               nondet_mjds=()):
     lc = [
         {'mag': mag, 'magerr': magerr, 'mjd': 60000 + i}
         for i, (mag, magerr) in enumerate(points)
     ] if points is not None else []
+    lcnondets = [{'mjd': mjd, 'mag5sig': 19.5} for mjd in nondet_mjds]
     return {
         'object': {
             'id': '1234567890123456789',
@@ -18,6 +20,7 @@ def make_entry(detection_list_id=4, observation_status=None, points=((15.5, 0.1)
             'vra': vra,
         },
         'lc': lc,
+        'lcnondets': lcnondets,
     }
 
 
@@ -61,6 +64,23 @@ class TestIsAtPeak:
 
     def test_only_last_three_points_considered_regardless_of_older_faint_history(self):
         assert mpw.is_at_peak(make_entry(points=((20.0, 0.1), (15.5, 0.1), (15.5, 0.1), (15.5, 0.1)))) is True
+
+    def test_fails_when_most_recent_points_are_nondetections(self):
+        entry = make_entry(points=((15.5, 0.1), (15.5, 0.1), (15.5, 0.1)), nondet_mjds=(60010, 60011, 60012))
+        assert mpw.is_at_peak(entry) is False
+
+    def test_passes_when_nondets_are_older_than_recent_detections(self):
+        entry = make_entry(points=((15.5, 0.1), (15.5, 0.1), (15.5, 0.1)), nondet_mjds=(59990, 59991))
+        assert mpw.is_at_peak(entry) is True
+
+    def test_fails_when_single_recent_nondet_bumps_a_detection_out_of_last_three(self):
+        entry = make_entry(points=((15.5, 0.1), (15.5, 0.1), (15.5, 0.1), (15.5, 0.1)), nondet_mjds=(60010,))
+        assert mpw.is_at_peak(entry) is False
+
+    def test_passes_when_no_lcnondets_key(self):
+        entry = make_entry()
+        del entry['lcnondets']
+        assert mpw.is_at_peak(entry) is True
 
 
 
