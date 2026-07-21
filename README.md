@@ -123,5 +123,10 @@ id    atlas_id             active  date_added           last_mag  last_mag_err  
 
 
 
+# Heloise's Quick Notes
 
+To find the number of objects (unique) added to a list on each day you can do:
 
+```sql
+select substr(date_added, 1, 10) as day_added, count(distinct(atlas_id)) from bk_peak group by day_added;
+```
