@@ -39,10 +39,16 @@ def is_at_peak(entry):
     """ Function that contains the logic that decides if a lightcurve is at peak
     Here there is no constraint that the object must be unclassified.
 
-    The last N_RECENT_POINTS lc points must each be real detections
-    (mag > 0) that are brighter than MAG_THRESHOLD even allowing for their
-    1-sigma error bar (mag - magerr < MAG_THRESHOLD). Non-detections or
-    fewer than N_RECENT_POINTS points in the lc fail this check.
+    Non-detections don't show up in `lc` - they live in `lcnondets` (limiting
+    mag only, no mag/magerr). So the last N_RECENT_POINTS "visits" are found
+    by merging `lc` and `lcnondets` on mjd; any of those most-recent visits
+    landing in `lcnondets` means the object hasn't actually been seen lately,
+    even if `lc` on its own still ends on old bright points.
+
+    The last N_RECENT_POINTS visits must each be real detections in `lc`
+    that are brighter than MAG_THRESHOLD even allowing for their 1-sigma
+    error bar (mag - magerr < MAG_THRESHOLD). Non-detections or fewer than
+    N_RECENT_POINTS visits total fail this check.
 
     Return
     ------
@@ -52,14 +58,23 @@ def is_at_peak(entry):
         return False
 
     lc = entry.get('lc', [])
-    if len(lc) < N_RECENT_POINTS:
+    lcnondets = entry.get('lcnondets', [])
+
+    visits = (
+        [{'mjd': point['mjd'], 'is_detection': True, 'mag': point.get('mag'), 'magerr': point.get('magerr')}
+         for point in lc]
+        + [{'mjd': point['mjd'], 'is_detection': False} for point in lcnondets]
+    )
+    if len(visits) < N_RECENT_POINTS:
         return False
 
-    recent_points = sorted(lc, key=lambda point: point['mjd'])[-N_RECENT_POINTS:]
+    recent_visits = sorted(visits, key=lambda visit: visit['mjd'])[-N_RECENT_POINTS:]
 
-    for point in recent_points:
-        mag = point.get('mag')
-        magerr = point.get('magerr')
+    for visit in recent_visits:
+        if not visit['is_detection']:
+            return False
+        mag = visit.get('mag')
+        magerr = visit.get('magerr')
         if mag is None or magerr is None or mag <= 0:
             return False
         if not (mag - magerr < MAG_THRESHOLD):
