@@ -32,6 +32,14 @@ def should_add_to_salt(entry, vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude
     """
     if entry['object']['detection_list_id'] == 0:
         return False
+    # Claude added this for issue #19 (2026-07-21): clean_up() removes on
+    # observation_status being set, but this function never checked it -
+    # objects could be added and immediately removed on the next cycle.
+    classification = entry['object'].get('observation_status')
+    if classification == '':
+        classification = None
+    if classification is not None:
+        return False
     if entry['object']['dec'] >= SALT_DEC_MAX:
         # For SALT we don't want anything with declination +10 or above.
         return False

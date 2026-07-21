@@ -5,7 +5,7 @@ import numpy as np
 import atlas_sao.saltListWizard as slw
 
 
-def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN', dec=-30.0):
+def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN', dec=-30.0, observation_status=None):
     return {
         'object': {
             'id': '1234567890123456789',
@@ -13,6 +13,7 @@ def make_entry(detection_list_id=4, vra=9.5, sherlock_class='SN', dec=-30.0):
             'vra': vra,
             'sherlockClassification': sherlock_class,
             'dec': dec,
+            'observation_status': observation_status,
         }
     }
 
@@ -23,6 +24,12 @@ class TestShouldAddToSalt:
 
     def test_fails_garbage(self):
         assert slw.should_add_to_salt(make_entry(detection_list_id=0)) is False
+
+    def test_fails_classified(self):
+        assert slw.should_add_to_salt(make_entry(observation_status='mover')) is False
+
+    def test_empty_string_classification_treated_as_unclassified(self):
+        assert slw.should_add_to_salt(make_entry(observation_status='')) is True
 
     def test_fails_vra_none(self):
         entry = make_entry()
