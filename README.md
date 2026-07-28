@@ -121,6 +121,8 @@ id    atlas_id             active  date_added           last_mag  last_mag_err  
 
 ```
 
+`last_mag`/`last_mag_err`/`last_mag_filt` are deliberately left unpopulated ([#20](https://github.com/HeloiseS/atlas_sao/issues/20)) — not needed for the current pipeline, kept in the schema in case a future use case needs them.
+
 
 
 # Heloise's Quick Notes
