@@ -74,7 +74,7 @@ def upsert_xtgal(atlas_ids: list,
 
     with get_connection(db_path) as conn:
         conn.executemany(
-            'INSERT OR IGNORE INTO xtgal_3mnths (atlas_id, date_added) VALUES (?, CURRENT_TIMESTAMP)',
+            'INSERT OR IGNORE INTO xtgal_watchlist (atlas_id, date_added) VALUES (?, CURRENT_TIMESTAMP)',
             [(int(aid),) for aid in atlas_ids]
         )
 
@@ -91,7 +91,7 @@ def deactivate_old_alerts(cutoff_date: str, db_path: str = None) -> None:
     """
     with get_connection(db_path) as conn:
         conn.execute(
-            'UPDATE xtgal_3mnths SET active = 0 WHERE date_added < ?',
+            'UPDATE xtgal_watchlist SET active = 0 WHERE date_added < ?',
             (cutoff_date,)
         )
 
@@ -106,7 +106,7 @@ def get_active_xtgal_ids(db_path: str = None) -> list:
     list of ATLAS_IDs for which ACTIVE=1
     """ 
     with get_connection(db_path) as conn:
-        rows = conn.execute('SELECT atlas_id FROM xtgal_3mnths WHERE active = 1').fetchall()
+        rows = conn.execute('SELECT atlas_id FROM xtgal_watchlist WHERE active = 1').fetchall()
     
     conn.close() # technically not needed because GC would do it, but adding anyways
     

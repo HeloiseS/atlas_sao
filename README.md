@@ -89,11 +89,11 @@ For now we will use a dumb placeholder: **brighter than 16.9 mag**. Why? because
 
 
 **Inputs**
-- Objects that have been classified as good in the last X weeks (i.e are set as Active in `xtgal_3mnths` table.)
+- Objects that have been classified as good in the last X weeks (i.e are set as Active in `xtgal_watchlist` table.)
 
 **Script**: `refreshXtgal.py`
 - Finds all atlas\_ids in VRA Scores table (`tsc_vra_scores`) which have been labeled as extragalacitc by a person (`preal == 1.0`, `pgal==0.0`).
-- Puts them in the `xtgal_3mnths` table with Active = 1. 
+- Puts them in the `xtgal_watchlist` table with Active = 1. 
 - Find alerts that are more than X weeks old and sets Active = 0 
 
 
@@ -112,7 +112,7 @@ id  atlas_id             date_added           date_removed  vra_score_when_added
 25  1200738260210707300  2026-07-01 15:17:23                                               2026-07-01 15:17:23
 ```
 
-### `xtgal_3mnths`
+### `xtgal_watchlist`
 
 ```
 id    atlas_id             active  date_added           last_mag  last_mag_err  last_mag_filt  timestamp          

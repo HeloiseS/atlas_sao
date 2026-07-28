@@ -1,4 +1,4 @@
-CREATE TABLE xtgal_3mnths (
+CREATE TABLE xtgal_watchlist (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     atlas_id    INTEGER NOT NULL UNIQUE,
     active      INTEGER NOT NULL DEFAULT 1,

@@ -82,14 +82,14 @@ class TestUpsertXtgal:
     def test_noop_when_empty(self, db_path):
         db.upsert_xtgal([], db_path=db_path)
         conn = sqlite3.connect(db_path)
-        count = conn.execute('SELECT COUNT(*) FROM xtgal_3mnths').fetchone()[0]
+        count = conn.execute('SELECT COUNT(*) FROM xtgal_watchlist').fetchone()[0]
         conn.close()
         assert count == 0
 
     def test_inserts_new_row(self, db_path):
         db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
         conn = sqlite3.connect(db_path)
-        row = conn.execute('SELECT atlas_id, active, date_added FROM xtgal_3mnths').fetchone()
+        row = conn.execute('SELECT atlas_id, active, date_added FROM xtgal_watchlist').fetchone()
         conn.close()
         assert row[0] == 1111111111111111111
         assert row[1] == 1
@@ -99,7 +99,7 @@ class TestUpsertXtgal:
         db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
         db.upsert_xtgal(['1111111111111111111'], db_path=db_path)
         conn = sqlite3.connect(db_path)
-        count = conn.execute('SELECT COUNT(*) FROM xtgal_3mnths').fetchone()[0]
+        count = conn.execute('SELECT COUNT(*) FROM xtgal_watchlist').fetchone()[0]
         conn.close()
         assert count == 1
 
@@ -107,23 +107,23 @@ class TestUpsertXtgal:
 class TestDeactivateBefore:
     def test_deactivates_old_entries(self, db_path):
         conn = sqlite3.connect(db_path)
-        conn.execute("INSERT INTO xtgal_3mnths (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-01-01', 1)")
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-01-01', 1)")
         conn.commit()
         conn.close()
         db.deactivate_old_alerts('2026-06-01', db_path=db_path)
         conn = sqlite3.connect(db_path)
-        active = conn.execute('SELECT active FROM xtgal_3mnths').fetchone()[0]
+        active = conn.execute('SELECT active FROM xtgal_watchlist').fetchone()[0]
         conn.close()
         assert active == 0
 
     def test_leaves_recent_entries_active(self, db_path):
         conn = sqlite3.connect(db_path)
-        conn.execute("INSERT INTO xtgal_3mnths (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-07-01', 1)")
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, date_added, active) VALUES (1111111111111111111, '2026-07-01', 1)")
         conn.commit()
         conn.close()
         db.deactivate_old_alerts('2026-06-01', db_path=db_path)
         conn = sqlite3.connect(db_path)
-        active = conn.execute('SELECT active FROM xtgal_3mnths').fetchone()[0]
+        active = conn.execute('SELECT active FROM xtgal_watchlist').fetchone()[0]
         conn.close()
         assert active == 1
 
@@ -134,8 +134,8 @@ class TestGetActiveXtgalIds:
 
     def test_returns_only_active_ids(self, db_path):
         conn = sqlite3.connect(db_path)
-        conn.execute("INSERT INTO xtgal_3mnths (atlas_id, active) VALUES (1111111111111111111, 1)")
-        conn.execute("INSERT INTO xtgal_3mnths (atlas_id, active) VALUES (2222222222222222222, 0)")
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (1111111111111111111, 1)")
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (2222222222222222222, 0)")
         conn.commit()
         conn.close()
         ids = db.get_active_xtgal_ids(db_path=db_path)

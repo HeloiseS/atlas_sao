@@ -198,12 +198,12 @@ def fill_up():
             peak_ids_set = set()
         logging.info(f"{len(peak_ids_set)} objects currently in Mookodi Peak list.")
 
-        logging.info("Fetching active candidates from xtgal_3mnths...")
+        logging.info("Fetching active candidates from xtgal_watchlist...")
         follow_up_ids = np.array([str(id_) for id_ in db.get_active_xtgal_ids()])
-        logging.info(f"Fetched {len(follow_up_ids)} active entries from xtgal_3mnths.")
+        logging.info(f"Fetched {len(follow_up_ids)} active entries from xtgal_watchlist.")
 
         if len(follow_up_ids) == 0:
-            logging.info("xtgal_3mnths is empty - nothing to evaluate.")
+            logging.info("xtgal_watchlist is empty - nothing to evaluate.")
             return [], {}
 
         candidate_ids = np.array([id_ for id_ in follow_up_ids if id_ not in peak_ids_set])

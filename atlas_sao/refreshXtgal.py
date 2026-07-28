@@ -1,4 +1,4 @@
-# Claude wrote this for xtgal_3mnths cache refresh (2026-06-30)
+# Claude wrote this for xtgal_watchlist cache refresh (2026-06-30)
 # HFS Reviewed 2026-07-01 - docstrings comments 
 from datetime import datetime, timedelta
 import atlasapiclient.client as ac
@@ -44,7 +44,7 @@ def refresh(n_weeks=N_WEEKS, db_path=None):
 
     db.upsert_xtgal(atlas_ids, db_path=db_path)
     db.deactivate_old_alerts(cutoff, db_path=db_path)
-    logging.info(f"xtgal_3mnths refreshed. Deactivated entries before {cutoff}.")
+    logging.info(f"xtgal_watchlist refreshed. Deactivated entries before {cutoff}.")
 
 
 if __name__ == "__main__":
