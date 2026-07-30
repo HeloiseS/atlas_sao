@@ -169,13 +169,13 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
 
 
 if __name__ == "__main__":
-    to_remove_live = clean_up(objectgroupid=16, list_name='mookodi_live')
-    remove_targets_from_list(to_remove_live, list_name='mookodi_live')
+    to_remove_live = clean_up(objectgroupid=16, list_name='bright_south_transients_100mpc')
+    remove_targets_from_list(to_remove_live, list_name='bright_south_transients_100mpc')
     db.log_removed(to_remove_live, 'bk_young_fast_track')
 
-    to_remove_base = clean_up(objectgroupid=2, list_name='mookodi')
-    remove_targets_from_list(to_remove_base, list_name='mookodi')
+    to_remove_base = clean_up(objectgroupid=2, list_name='south_transients_100mpc')
+    remove_targets_from_list(to_remove_base, list_name='south_transients_100mpc')
 
     to_add, vra_scores = fill_up()
-    add_targets_to_list(to_add, list_name='mookodi_live')
+    add_targets_to_list(to_add, list_name='bright_south_transients_100mpc')
     db.log_added(to_add, 'bk_young_fast_track', vra_scores=vra_scores)

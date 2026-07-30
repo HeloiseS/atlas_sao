@@ -86,18 +86,18 @@ class TestIsAtPeak:
 
 @patch("atlas_sao.mookodiPeakListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_calls_write_once_with_array(mock_write):
-    mpw.add_targets_to_list(['1234567890123456789', '9876543210987654321'], 'mookodi_peak')
+    mpw.add_targets_to_list(['1234567890123456789', '9876543210987654321'], 'south_transients_peak')
 
     mock_write.assert_called_once()
     _, kwargs = mock_write.call_args
     assert list(kwargs['array_ids']) == ['1234567890123456789', '9876543210987654321']
     assert isinstance(kwargs['array_ids'], np.ndarray)
-    assert kwargs['list_name'] == 'mookodi_peak'
+    assert kwargs['list_name'] == 'south_transients_peak'
 
 
 @patch("atlas_sao.mookodiPeakListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_noop_when_empty(mock_write):
-    mpw.add_targets_to_list([], 'mookodi_peak')
+    mpw.add_targets_to_list([], 'south_transients_peak')
 
     mock_write.assert_not_called()
 
@@ -106,20 +106,20 @@ def test_add_targets_to_list_noop_when_empty(mock_write):
 def test_remove_targets_from_list_calls_remove_once_with_array_and_chunk_size(mock_remove):
     mock_remove.return_value = MagicMock()
 
-    mpw.remove_targets_from_list(['1234567890123456789'], 'mookodi_peak')
+    mpw.remove_targets_from_list(['1234567890123456789'], 'south_transients_peak')
 
     mock_remove.assert_called_once()
     _, kwargs = mock_remove.call_args
     assert list(kwargs['array_ids']) == ['1234567890123456789']
     assert isinstance(kwargs['array_ids'], np.ndarray)
-    assert kwargs['list_name'] == 'mookodi_peak'
+    assert kwargs['list_name'] == 'south_transients_peak'
     assert kwargs['chunk_size'] == 25
     mock_remove.return_value.get_response.assert_not_called()
 
 
 @patch("atlas_sao.mookodiPeakListWizard.ac.RemoveFromCustomList")
 def test_remove_targets_from_list_noop_when_empty(mock_remove):
-    mpw.remove_targets_from_list([], 'mookodi_peak')
+    mpw.remove_targets_from_list([], 'south_transients_peak')
 
     mock_remove.assert_not_called()
 

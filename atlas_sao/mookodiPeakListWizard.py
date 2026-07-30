@@ -248,10 +248,10 @@ def fill_up():
 
 if __name__ == "__main__":
     to_remove = clean_up()
-    remove_targets_from_list(to_remove, list_name='mookodi_peak')
+    remove_targets_from_list(to_remove, list_name='south_transients_peak')
     db.log_removed(to_remove, 'bk_peak')
 
     to_add, vra_scores = fill_up()
     logging.info(f"to_add IDs and types: {[(id_, type(id_)) for id_ in to_add]}")
-    add_targets_to_list(to_add, list_name='mookodi_peak')
+    add_targets_to_list(to_add, list_name='south_transients_peak')
     db.log_added(to_add, 'bk_peak', vra_scores=vra_scores)
