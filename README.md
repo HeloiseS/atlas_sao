@@ -45,7 +45,7 @@ id  atlas_id             date_added           date_removed  vra_score_when_added
 Because the staging list used to be where Mookodi would get its feed from but it would very often take spectra of objects that are too faint. The Live lists is only filled with objects that reach a certain magnitude threshold (and are yet unclassified).
 
 
-## SALT List 
+## SALT List [RETIRED -: 202-07-30]
 
 Custom List: 14
 
