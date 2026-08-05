@@ -5,6 +5,7 @@ dependencies = [
     "atlasapiclient",
     "numpy",
     "pandas",
+    "slack_sdk",
 ]
 
 [build-system]
