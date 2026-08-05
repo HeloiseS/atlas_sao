@@ -1,5 +1,14 @@
+import json
+import os
 from unittest.mock import MagicMock
 import atlas_sao.slackbot as slackbot
+
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), 'fixtures')
+
+
+def load_fixture(name):
+    with open(os.path.join(FIXTURES_DIR, name)) as f:
+        return json.load(f)
 
 
 class TestResolveSender:
@@ -45,3 +54,75 @@ class TestResolveTelescopeAndList:
     def test_unknown_sender_returns_none(self):
         result = slackbot.resolve_telescope_and_list('B999', {}, {})
         assert result == (None, None)
+
+
+class TestParseBlocksFields:
+    def test_extracts_labelled_fields(self):
+        blocks = [
+            {'type': 'section', 'fields': [
+                {'type': 'mrkdwn', 'text': '*RA / Dec*\n181.71149, -36.26852'},
+                {'type': 'mrkdwn', 'text': '*Latest*\n16.36 o · 2026-07-31 17:45:45 UT'},
+            ]}
+        ]
+        fields = slackbot.parse_blocks_fields(blocks)
+        assert fields == {
+            'RA / Dec': '181.71149, -36.26852',
+            'Latest': '16.36 o · 2026-07-31 17:45:45 UT',
+        }
+
+    def test_ignores_non_section_blocks(self):
+        blocks = [
+            {'type': 'header', 'text': {'type': 'plain_text', 'text': 'not a field'}},
+            {'type': 'divider'},
+        ]
+        assert slackbot.parse_blocks_fields(blocks) == {}
+
+    def test_empty_blocks_returns_empty_dict(self):
+        assert slackbot.parse_blocks_fields([]) == {}
+
+
+class TestParseBotMessage:
+    def test_parses_id_ra_dec_latest_mag(self):
+        message = {
+            'bot_id': 'B123',
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*id*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*RA / Dec*\n181.71149, -36.26852'},
+                    {'type': 'mrkdwn', 'text': '*Latest*\n16.36 o · 2026-07-31 17:45:45 UT'},
+                ]}
+            ]
+        }
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['atlas_id'] == 1120650750361606600
+        assert parsed['ra'] == 181.71149
+        assert parsed['dec'] == -36.26852
+        assert parsed['latest_mag'] == 16.36
+
+    def test_non_integer_id_leaves_atlas_id_none(self):
+        message = {
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*id*\nATLAS26jri'},
+                ]}
+            ]
+        }
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['atlas_id'] is None
+
+    def test_missing_fields_all_none(self):
+        parsed = slackbot.parse_bot_message({'blocks': []})
+        assert parsed == {
+            'telescope': None, 'related_list': None,
+            'atlas_id': None, 'ra': None, 'dec': None, 'latest_mag': None,
+        }
+
+    def test_real_sample_fixture(self):
+        message = load_fixture('slack_sample_bot_message.json')
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['ra'] == 181.71149
+        assert parsed['dec'] == -36.26852
+        assert parsed['latest_mag'] == 16.36
+        assert parsed['atlas_id'] is None
+        assert parsed['telescope'] is None
+        assert parsed['related_list'] is None
