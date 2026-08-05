@@ -124,23 +124,24 @@ def log_slack_message(slack_ts: str,
                        ra: float | None = None,
                        dec: float | None = None,
                        latest_mag: float | None = None,
+                       status: str | None = None,
                        message_time: str | None = None,
                        db_path: str | None = None) -> None:
     """Adds a new slack message to the slack_messages table.
 
     Note
-    ---- 
-    This needs a parser in order to extract the ra, dec, latest_mag etc 
-    which are contained within the text fields of the raw_message. 
+    ----
+    This needs a parser in order to extract the ra, dec, latest_mag etc
+    which are contained within the text fields of the raw_message.
     """
     with get_connection(db_path) as conn:
         conn.execute(
             'INSERT OR IGNORE INTO slack_messages '
             '(slack_ts, sender_id, sender_name, telescope, related_list, '
-            'raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, message_time) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (slack_ts, sender_id, sender_name, telescope, related_list,
-             raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, message_time)
+             raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time)
         )
 
     conn.close() # technically not needed because GC would do it, but adding anyways

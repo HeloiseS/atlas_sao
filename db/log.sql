@@ -52,6 +52,7 @@ CREATE TABLE slack_messages (
     ra            REAL,
     dec           REAL,
     latest_mag    REAL,
+    status        TEXT,
     message_time  TEXT,
     timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
