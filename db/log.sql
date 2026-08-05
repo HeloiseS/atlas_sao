@@ -38,3 +38,20 @@ CREATE TABLE bk_peak (
     version      TEXT,
     timestamp    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE slack_messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    slack_ts      TEXT NOT NULL UNIQUE,
+    sender_id     TEXT NOT NULL,
+    sender_name   TEXT NOT NULL,
+    telescope     TEXT,
+    related_list  TEXT,
+    raw_text      TEXT,
+    raw_blocks    TEXT,
+    atlas_id      INTEGER,
+    ra            REAL,
+    dec           REAL,
+    latest_mag    REAL,
+    message_time  TEXT,
+    timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

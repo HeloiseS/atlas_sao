@@ -109,6 +109,57 @@ def get_active_xtgal_ids(db_path: str = None) -> list:
         rows = conn.execute('SELECT atlas_id FROM xtgal_watchlist WHERE active = 1').fetchall()
     
     conn.close() # technically not needed because GC would do it, but adding anyways
-    
+
     return [row[0] for row in rows]
+
+
+def log_slack_message(slack_ts: str,
+                       sender_id: str,
+                       sender_name: str,
+                       telescope: str = None,
+                       related_list: str = None,
+                       raw_text: str = None,
+                       raw_blocks: str = None,
+                       atlas_id: int = None,
+                       ra: float = None,
+                       dec: float = None,
+                       latest_mag: float = None,
+                       message_time: str = None,
+                       db_path: str = None) -> None:
+    """Adds a new slack message to the slack_messages table.
+
+    Note
+    ---- 
+    This needs a parser in order to extract the ra, dec, latest_mag etc 
+    which are contained within the text fields of the raw_message. 
+    """
+    with get_connection(db_path) as conn:
+        conn.execute(
+            'INSERT OR IGNORE INTO slack_messages '
+            '(slack_ts, sender_id, sender_name, telescope, related_list, '
+            'raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, message_time) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (slack_ts, sender_id, sender_name, telescope, related_list,
+             raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, message_time)
+        )
+
+    conn.close() # technically not needed because GC would do it, but adding anyways
+
+
+def get_last_slack_ts(db_path: str = None) -> str:
+    """Get the latest slack timemstamp from the slack_messages table. 
+
+    Note
+    ----
+    This is NOT the same as the timestamp added automatically by the table when filling a row
+    it's the timestamp on slack in Unix epoch seconds. Because it has microseconds precision
+    it is unique and slack uses it as a unique key and polling cursor (like a group_id in kafka, 
+    its like our place in the thread so we can poll from slack only recent messages without 
+    missing any!)
+    """
+    with get_connection(db_path) as conn:
+        row = conn.execute('SELECT MAX(slack_ts) FROM slack_messages').fetchone()
+
+    conn.close() 
+    return row[0]
 
