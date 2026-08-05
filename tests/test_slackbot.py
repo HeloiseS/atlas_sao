@@ -1,6 +1,7 @@
 import json
 import os
 from unittest.mock import MagicMock
+import atlas_sao.db as db
 import atlas_sao.slackbot as slackbot
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), 'fixtures')
@@ -126,3 +127,98 @@ class TestParseBotMessage:
         assert parsed['atlas_id'] is None
         assert parsed['telescope'] is None
         assert parsed['related_list'] is None
+
+
+class TestMessageTimeFromTs:
+    def test_converts_to_utc_string(self):
+        assert slackbot.message_time_from_ts('1690833945.001900') == '2023-07-31 20:05:45'
+
+
+class TestFetchNewMessages:
+    def test_single_page(self):
+        client = MagicMock()
+        client.conversations_history.return_value = {
+            'messages': [{'ts': '1'}, {'ts': '2'}],
+            'response_metadata': {'next_cursor': ''},
+        }
+        messages = slackbot.fetch_new_messages(client, 'C123', oldest='0')
+        assert messages == [{'ts': '1'}, {'ts': '2'}]
+        client.conversations_history.assert_called_once_with(channel='C123', limit=200, oldest='0')
+
+    def test_follows_pagination_cursor(self):
+        client = MagicMock()
+        client.conversations_history.side_effect = [
+            {'messages': [{'ts': '1'}], 'response_metadata': {'next_cursor': 'abc'}},
+            {'messages': [{'ts': '2'}], 'response_metadata': {'next_cursor': ''}},
+        ]
+        messages = slackbot.fetch_new_messages(client, 'C123', oldest='0')
+        assert messages == [{'ts': '1'}, {'ts': '2'}]
+        assert client.conversations_history.call_count == 2
+        second_call_kwargs = client.conversations_history.call_args_list[1].kwargs
+        assert second_call_kwargs['cursor'] == 'abc'
+
+    def test_no_oldest_omits_it_from_request(self):
+        client = MagicMock()
+        client.conversations_history.return_value = {
+            'messages': [], 'response_metadata': {'next_cursor': ''},
+        }
+        slackbot.fetch_new_messages(client, 'C123', oldest=None)
+        client.conversations_history.assert_called_once_with(channel='C123', limit=200)
+
+
+class TestProcessMessage:
+    def _make_db(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = str(tmp_path / 'test.db')
+        conn = sqlite3.connect(db_path)
+        schema_path = os.path.join(os.path.dirname(__file__), '..', 'db', 'log.sql')
+        with open(schema_path) as f:
+            conn.executescript(f.read())
+        conn.close()
+        monkeypatch.setattr(db, 'get_connection', lambda path=None: sqlite3.connect(db_path))
+        return db_path
+
+    def test_bot_message_logs_parsed_fields(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = {
+            'bot_id': 'B123',
+            'bot_profile': {'name': 'ATLAS SALT Triggers'},
+            'ts': '1690833945.001900',
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*id*\n1120650750361606600'},
+                ]}
+            ],
+        }
+
+        slackbot.process_message(
+            message, client, {},
+            {'B123': {'telescope': 'SALT', 'related_list': 'south_transients_100mpc'}}
+        )
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, telescope, related_list, atlas_id, raw_text FROM slack_messages'
+        ).fetchone()
+        conn.close()
+        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, None)
+
+    def test_human_message_logs_raw_text_only(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
+        message = {'user': 'U456', 'ts': '1690833945.001900', 'text': 'SALT confirms trigger on 2026abc'}
+
+        slackbot.process_message(message, client, {}, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, telescope, atlas_id, raw_text FROM slack_messages'
+        ).fetchone()
+        conn.close()
+        assert row == ('Simon de Wet', None, None, 'SALT confirms trigger on 2026abc')
