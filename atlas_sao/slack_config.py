@@ -6,7 +6,7 @@ DEFAULT_CONFIG_PATH = os.path.join(
 )
 
 
-def load_slack_config(config_path: str = None, bot_name: str = "el01z") -> dict:
+def load_slack_config(config_path: str | None = None, bot_name: str = "el01z") -> dict:
     """Loads the slack config for the right bot
     
     Note

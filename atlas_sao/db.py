@@ -11,7 +11,7 @@ import sqlite3
 
 
 
-def get_connection(db_path: str = None) -> sqlite3.Connection:
+def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     """Makes connection to sqlite db and returns it.
     Expects that the data base is under the atlas_sao/db/log.db file 
     """
@@ -22,8 +22,8 @@ def get_connection(db_path: str = None) -> sqlite3.Connection:
 
 def log_added(atlas_ids: list, 
               bk_table: str, 
-              vra_scores: dict = None, 
-              db_path: str = None) -> None:
+              vra_scores: dict | None = None,
+              db_path: str | None = None) -> None:
     """Log when ATLAS_ID added to a list - this requires VRA score at time of adding"""
     
     if not atlas_ids:
@@ -45,7 +45,7 @@ def log_added(atlas_ids: list,
 
 def log_removed(atlas_ids: list, 
                 bk_table: str, 
-                db_path: str = None) -> None:
+                db_path: str | None = None) -> None:
     """Log when ATLAS ID removed from a list"""
     if not atlas_ids:
         return
@@ -62,7 +62,7 @@ def log_removed(atlas_ids: list,
 
 
 def upsert_xtgal(atlas_ids: list,
-                 db_path: str = None) -> None:
+                 db_path: str | None = None) -> None:
     """Adds a row to XTGAL table if it doesn't already exist.
 
     Returns
@@ -81,7 +81,7 @@ def upsert_xtgal(atlas_ids: list,
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def deactivate_old_alerts(cutoff_date: str, db_path: str = None) -> None:
+def deactivate_old_alerts(cutoff_date: str, db_path: str | None = None) -> None:
     """Sets status ACTIVE = 0 for alerts with date_added < cutoff_date
     
     Parameters
@@ -98,7 +98,7 @@ def deactivate_old_alerts(cutoff_date: str, db_path: str = None) -> None:
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def get_active_xtgal_ids(db_path: str = None) -> list:
+def get_active_xtgal_ids(db_path: str | None = None) -> list:
     """Utility function to know which alerts are set to active
     
     Returns
@@ -116,16 +116,16 @@ def get_active_xtgal_ids(db_path: str = None) -> list:
 def log_slack_message(slack_ts: str,
                        sender_id: str,
                        sender_name: str,
-                       telescope: str = None,
-                       related_list: str = None,
-                       raw_text: str = None,
-                       raw_blocks: str = None,
-                       atlas_id: int = None,
-                       ra: float = None,
-                       dec: float = None,
-                       latest_mag: float = None,
-                       message_time: str = None,
-                       db_path: str = None) -> None:
+                       telescope: str | None = None,
+                       related_list: str | None = None,
+                       raw_text: str | None = None,
+                       raw_blocks: str | None = None,
+                       atlas_id: int | None = None,
+                       ra: float | None = None,
+                       dec: float | None = None,
+                       latest_mag: float | None = None,
+                       message_time: str | None = None,
+                       db_path: str | None = None) -> None:
     """Adds a new slack message to the slack_messages table.
 
     Note
@@ -146,7 +146,7 @@ def log_slack_message(slack_ts: str,
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def get_last_slack_ts(db_path: str = None) -> str:
+def get_last_slack_ts(db_path: str | None = None) -> str:
     """Get the latest slack timemstamp from the slack_messages table. 
 
     Note
