@@ -40,23 +40,6 @@ class TestResolveSender:
         client.users_info.assert_called_once()
 
 
-class TestResolveTelescopeAndList:
-    def test_uses_parsed_fields_when_present(self):
-        result = slackbot.resolve_telescope_and_list(
-            'B123', {'telescope': 'SALT', 'related_list': 'south_transients_100mpc'}, {}
-        )
-        assert result == ('SALT', 'south_transients_100mpc')
-
-    def test_falls_back_to_sender_lookup(self):
-        lookup = {'B123': {'telescope': 'SALT', 'related_list': 'south_transients_100mpc'}}
-        result = slackbot.resolve_telescope_and_list('B123', {}, lookup)
-        assert result == ('SALT', 'south_transients_100mpc')
-
-    def test_unknown_sender_returns_none(self):
-        result = slackbot.resolve_telescope_and_list('B999', {}, {})
-        assert result == (None, None)
-
-
 class TestParseBlocksFields:
     def test_extracts_labelled_fields(self):
         blocks = [
@@ -82,13 +65,27 @@ class TestParseBlocksFields:
         assert slackbot.parse_blocks_fields([]) == {}
 
 
+class TestParseTelescopeFromText:
+    def test_matches_salt_case_insensitive(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient SALT requests: 2 new target(s)') == 'SALT'
+        assert slackbot.parse_telescope_from_text('atlas transient salt requests') == 'SALT'
+
+    def test_matches_mookodi_case_insensitive(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient Mookodi requests') == 'Mookodi'
+        assert slackbot.parse_telescope_from_text('atlas transient MOOKODI requests') == 'Mookodi'
+
+    def test_no_match_returns_none(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient requests') is None
+
+
 class TestParseBotMessage:
     def test_parses_id_ra_dec_latest_mag(self):
         message = {
             'bot_id': 'B123',
+            'text': 'ATLAS Transient SALT requests: 1 new target(s)',
             'blocks': [
                 {'type': 'section', 'fields': [
-                    {'type': 'mrkdwn', 'text': '*id*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\n1120650750361606600'},
                     {'type': 'mrkdwn', 'text': '*RA / Dec*\n181.71149, -36.26852'},
                     {'type': 'mrkdwn', 'text': '*Latest*\n16.36 o · 2026-07-31 17:45:45 UT'},
                 ]}
@@ -104,7 +101,7 @@ class TestParseBotMessage:
         message = {
             'blocks': [
                 {'type': 'section', 'fields': [
-                    {'type': 'mrkdwn', 'text': '*id*\nATLAS26jri'},
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\nATLAS26jri'},
                 ]}
             ]
         }
@@ -114,19 +111,20 @@ class TestParseBotMessage:
     def test_missing_fields_all_none(self):
         parsed = slackbot.parse_bot_message({'blocks': []})
         assert parsed == {
-            'telescope': None, 'related_list': None,
+            'telescope': None, 'related_list': None, 'status': None,
             'atlas_id': None, 'ra': None, 'dec': None, 'latest_mag': None,
         }
 
     def test_real_sample_fixture(self):
         message = load_fixture('slack_sample_bot_message.json')
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['ra'] == 181.71149
-        assert parsed['dec'] == -36.26852
-        assert parsed['latest_mag'] == 16.36
-        assert parsed['atlas_id'] is None
-        assert parsed['telescope'] is None
-        assert parsed['related_list'] is None
+        assert parsed['ra'] == 208.30919
+        assert parsed['dec'] == 0.44793
+        assert parsed['latest_mag'] == 16.72
+        assert parsed['atlas_id'] == 1135314261002652300
+        assert parsed['telescope'] == 'SALT'
+        assert parsed['related_list'] == '100Mpc Southern Transients'
+        assert parsed['status'] == 'Triggered'
 
 
 class TestMessageTimeFromTs:
@@ -178,6 +176,21 @@ class TestProcessMessage:
         monkeypatch.setattr(db, 'get_connection', lambda path=None: sqlite3.connect(db_path))
         return db_path
 
+    def test_bot_message_without_profile_is_skipped(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = {'bot_id': 'B123', 'user': 'U0BM9M40WN8', 'ts': '1690833945.001900', 'upload': True}
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
+        conn.close()
+        assert count == 0
+        client.users_info.assert_not_called()
+
     def test_bot_message_logs_parsed_fields(self, monkeypatch, tmp_path):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
@@ -187,24 +200,24 @@ class TestProcessMessage:
             'bot_id': 'B123',
             'bot_profile': {'name': 'ATLAS SALT Triggers'},
             'ts': '1690833945.001900',
+            'text': 'ATLAS Transient SALT requests: 1 new target(s)',
             'blocks': [
                 {'type': 'section', 'fields': [
-                    {'type': 'mrkdwn', 'text': '*id*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*Status*\nTriggered'},
+                    {'type': 'mrkdwn', 'text': '*Trigger source*\nsouth_transients_100mpc'},
                 ]}
             ],
         }
 
-        slackbot.process_message(
-            message, client, {},
-            {'B123': {'telescope': 'SALT', 'related_list': 'south_transients_100mpc'}}
-        )
+        slackbot.process_message(message, client, {})
 
         conn = sqlite3.connect(db_path)
         row = conn.execute(
-            'SELECT sender_name, telescope, related_list, atlas_id, raw_text FROM slack_messages'
+            'SELECT sender_name, telescope, related_list, atlas_id, status, raw_text FROM slack_messages'
         ).fetchone()
         conn.close()
-        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, None)
+        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered', None)
 
     def test_human_message_logs_raw_text_only(self, monkeypatch, tmp_path):
         import sqlite3
@@ -214,7 +227,7 @@ class TestProcessMessage:
         client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
         message = {'user': 'U456', 'ts': '1690833945.001900', 'text': 'SALT confirms trigger on 2026abc'}
 
-        slackbot.process_message(message, client, {}, {})
+        slackbot.process_message(message, client, {})
 
         conn = sqlite3.connect(db_path)
         row = conn.execute(

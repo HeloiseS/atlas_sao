@@ -1,6 +1,2 @@
 bot_token: "xoxb-put-your-bot-token-here"
 channel_id: "Cxxxxxxxxxx"
-sender_lookup:
-  Uxxxxxxxxxx:
-    telescope: "SALT"
-    related_list: "south_transients_100mpc"

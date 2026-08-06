@@ -37,20 +37,6 @@ def resolve_sender(message: dict,
     return sender_id, sender_name
 
 
-def resolve_telescope_and_list(sender_id: str, 
-                               parsed_fields: dict, 
-                               sender_lookup: dict) -> tuple:
-    """Figure out which telescope and ATLAS object list is concerned by a given message"""
-    telescope = parsed_fields.get('telescope')
-    related_list = parsed_fields.get('related_list')
-
-    if telescope is None or related_list is None:
-        fallback = sender_lookup.get(sender_id, {})
-        telescope = telescope or fallback.get('telescope')
-        related_list = related_list or fallback.get('related_list')
-
-    return telescope, related_list
-
 # ############################# #
 # ####        PARSER       #### #  
 # ############################# #
@@ -67,8 +53,6 @@ def parse_blocks_fields(blocks: list) -> dict:
     fields = {}
 
     # NOTE: This is extremly tied to how nic writes his messages
-    # I can forsee he will add the ATLAS_ID to the "section" block
-    # which currently contains the ATLAS name. We may have to revisit this. 
     for block in blocks:
         if block.get('type') != 'section':
             # we ignore e.g. dividers, headers
@@ -98,9 +82,19 @@ def parse_blocks_fields(blocks: list) -> dict:
     return fields
 
 
+def parse_telescope_from_text(text: str) -> str | None:
+    """# Claude wrote this for the Nic bot format change (2026-08-06)"""
+    text_lower = text.lower()
+    if 'salt' in text_lower:
+        return 'SALT'
+    if 'mookodi' in text_lower:
+        return 'Mookodi'
+    return None
+
+
 def parse_bot_message(message: dict) -> dict:
     """Parses a single message from a bot
-    
+
     Returns
     -------
     dictionary with keys:
@@ -109,24 +103,21 @@ def parse_bot_message(message: dict) -> dict:
     fields = parse_blocks_fields(message.get('blocks', []))
 
     parsed = {
-        # NOTE: I don't think we have telescope of related_list directly in the messages yet!
-        # This will break? NO IT WON'T! .get() in a dict returns None instead of KeyError 
-        # if key doesn't exist :) 
-        'telescope': fields.get('telescope'),
-        'related_list': fields.get('related_list'),
+        'telescope': parse_telescope_from_text(message.get('text', '')),
+        'related_list': fields.get('Trigger source'),
+        'status': fields.get('Status'),
         'atlas_id': None,
         'ra': None,
         'dec': None,
         'latest_mag': None,
     }
 
-    # NOTE: id Doesn't exist yet
-    raw_id = fields.get('id')
+    raw_id = fields.get('ATLAS ID')
     if raw_id is not None:
         try:
             parsed['atlas_id'] = int(raw_id.strip())
         except ValueError:
-            logging.warning(f"Slack bot message 'id' field not an integer, skipping atlas_id: {raw_id!r}")
+            logging.warning(f"Slack bot message 'ATLAS ID' field not an integer, skipping atlas_id: {raw_id!r}")
 
     radec = fields.get('RA / Dec')
     if radec and ',' in radec:
@@ -156,9 +147,9 @@ def message_time_from_ts(ts: str) -> str:
     return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def fetch_new_messages(client, 
-                       channel_id: str, 
-                       oldest: str,
+def fetch_new_messages(client,
+                       channel_id: str,
+                       oldest: str | None,
                        n: int = 200) -> list:
     """Polls for new messages in the channel
     
@@ -199,12 +190,15 @@ def fetch_new_messages(client,
     return messages
 
 
-def process_message(message: dict, 
-                    client, 
-                    sender_cache: dict, 
-                    sender_lookup: dict) -> None:
+def process_message(message: dict,
+                    client,
+                    sender_cache: dict) -> None:
     """Fully processes a single slack message
     """
+    if 'bot_id' in message and 'bot_profile' not in message:
+        # Claude wrote this for the bot file-upload skip (2026-08-06)
+        logging.info(f"Skipping bot message with no bot_profile (likely a file upload), ts={message.get('ts')}")
+        return
 
     # 1. Who sent us the message? Bot or User?
     sender_id, sender_name = resolve_sender(message, client, sender_cache)
@@ -223,37 +217,31 @@ def process_message(message: dict,
         # if it wasn't a bot, it was a human
         # We initialize the parsed dictionary with empty values
         # because we don't yet have the parser, 
-        parsed = {'telescope': None, 
-                  'related_list': None, 
-                  'atlas_id': None, 
-                  'ra': None, 
-                  'dec': None, 
+        parsed = {'telescope': None,
+                  'related_list': None,
+                  'status': None,
+                  'atlas_id': None,
+                  'ra': None,
+                  'dec': None,
                   'latest_mag': None}
         
         raw_text = message.get('text')
         raw_blocks = None
 
-    # 3 - Infer "telescope" and "related_list" if the fields are None 
-    # using a sender_lookup dictionary
-    # NOTE: currently Nic doesn't provide specific telescope or list fields 
-    # so we have defaults in a dictionary in the config file (loaded in main)
-    telescope, related_list = resolve_telescope_and_list(sender_id, 
-                                                         parsed, 
-                                                         sender_lookup)
-
-    # 4 - Update the slack_messages table 
+    # 3 - Update the slack_messages table
     db.log_slack_message(
         slack_ts=message['ts'],
         sender_id=sender_id,
         sender_name=sender_name,
-        telescope=telescope,
-        related_list=related_list,
+        telescope=parsed['telescope'],
+        related_list=parsed['related_list'],
         raw_text=raw_text,
         raw_blocks=raw_blocks,
         atlas_id=parsed['atlas_id'],
         ra=parsed['ra'],
         dec=parsed['dec'],
         latest_mag=parsed['latest_mag'],
+        status=parsed['status'],
         message_time=message_time_from_ts(message['ts']),
     )
     return 
@@ -271,12 +259,6 @@ if __name__ == "__main__":
 
     # 0.2 Instantiate our slack web client (not atlasapiclient)
     client = WebClient(token=config['bot_token'])
-
-    # 0.3 Look up table for the telescope and list if field not provided by message
-    #     NOTE: This only works now because Nic hasn't implemented his other reporting bots
-    #     if he implements the other bots before adding specifications to his text
-    #     we will log the wrong info. 
-    sender_lookup = config.get('sender_lookup', {})
 
     # ############ #
     # 1. POLL
@@ -298,6 +280,6 @@ if __name__ == "__main__":
     # 1.4 Looping over each message to process them: parse + add rows to log db (.slack_messages)
     for message in messages:
         try:
-            process_message(message, client, sender_cache, sender_lookup)
+            process_message(message, client, sender_cache)
         except Exception:
             logging.exception(f"Failed to process Slack message ts={message.get('ts')}")
