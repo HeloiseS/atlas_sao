@@ -31,6 +31,9 @@ class TestIsAtPeak:
     def test_fails_garbage(self):
         assert mpw.is_at_peak(make_entry(detection_list_id=0)) is False
 
+    def test_fails_hpm(self):
+        assert mpw.is_at_peak(make_entry(detection_list_id=11)) is False
+
     def test_fails_no_lightcurve(self):
         entry = make_entry()
         entry['lc'] = []

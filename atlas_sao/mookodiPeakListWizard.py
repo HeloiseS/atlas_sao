@@ -54,7 +54,7 @@ def is_at_peak(entry):
     ------
     bool
     """
-    if entry['object']['detection_list_id'] == 0:
+    if entry['object']['detection_list_id'] in (0, 11):  # 0=garbage, 11=pm_stars (HPM)
         return False
 
     lc = entry.get('lc', [])
