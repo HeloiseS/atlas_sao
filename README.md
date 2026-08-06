@@ -1,19 +1,34 @@
 # ATLAS SAO pipelines
 
-Last Updated: 2026-07-08
+Last Updated: 2026-08-05
 
 # User References
 
 There are currently 3 lists of interest:
-- **Mookodi Live List (Custom List 16)** | **[Working]** : Young Transients within 100 Mpc that have not yet been classified, with VRA Score > 8.5
-- **Salt List (Custom List 14)** | **[MVP]**: Young Transients that have not yet been classified, with VRA Score > 9.0 and that are not Orphans. 
-- **Mookodi Peak Transients (Custom List 17)** | **[Dev]**: Transients "at peak". Current definition of "at peak" is: the last 3 lc points are all real detections brighter than 16.9 mag (allowing for their 1-sigma error bar). This was for devs purposes and will be refined. 
+- **Bright 100Mpc Southern Transients (Custom List 16)** | **Mookodi** : Young Transients within 100 Mpc that have not yet been classified, with VRA Score > 8.5, brighter than 17 mag
+- **100Mpc Southern Transients (Custom List 2)** | **SALT**: Young Transients that have not yet been classified, with VRA Score > 8.5, within 100 Mpc. No mag limit. _FED DIRECTLY FROM PSAT-SERVER INGEST SCRIPT_
+- **Southern Transients at Peak (Custom List 17)** | **Mookodi**: Transients "at peak". Current definition of "at peak" is: the last 3 lc points are all real detections brighter than 16.9 mag (allowing for their 1-sigma error bar). 
 
 ---
 
 # Dev References
 
-## Mookodi Live List: Young Fast Track Transients
+## Slack Bot
+
+The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. 
+
+**To-Do**
+- Update the parser for Nic's updated messages 
+- Update the parser to include human parsing. Maybe can give Simon a standard message format.
+- Add to prod when convinced can read messages consistently:
+    - [ ] Stop the wizard cron jobs
+    - [ ] Add `slack_config_MINE.yaml` to prod via scp or copy pasting (NOT ON GH)
+    - [ ] DB migration to include the new table
+    - [ ] Pull the code
+    - [ ] Add bot to cron jobs and restart the list wizards
+
+
+## Bright 100Mpc Southern Transients
 Custom List: 16
 
 **Constraints**
@@ -45,34 +60,7 @@ id  atlas_id             date_added           date_removed  vra_score_when_added
 Because the staging list used to be where Mookodi would get its feed from but it would very often take spectra of objects that are too faint. The Live lists is only filled with objects that reach a certain magnitude threshold (and are yet unclassified).
 
 
-## SALT List [RETIRED -: 202-07-30]
-
-Custom List: 14
-
-**Constraints**
-- Not yet classified
-- VRA Score>9.0
-- NOT `ORPHANS`
-
-**Inputs**
-- Eyeball list. (Not Fast Track. If user wants fast track they can also use the Mookodi Young Trasnients Live List)
-
-
-**Script**: `saltListWizard.py` 
-- **Clean Salt List**: Removes objects that no longer pass our constraints from the Live list
-- **Logs removal from Salt list** in `bk_young_not_fast_track` by adding timestamp of when a given atlas\_id was removed from custom list 14.
-- **Adds alerts to the Salt list** 
-- **Logs adds** in  `bk_young_not_fast_track` by adding timestamp and the **vra score** at time of adding. 
-
-
-### `bk_young_not_fast_track`
-```
-id  atlas_id             date_added           date_removed  vra_score_when_added  version  timestamp          
---  -------------------  -------------------  ------------  --------------------  -------  -------------------
-8   1141048460225429100  2026-07-06 21:29:23                9.77169                        2026-07-06 21:29:23
-```
-
-## Mookodi Transients at Peak
+## Southern Transients at Peak
 
 Custom List: 17
 
@@ -131,4 +119,31 @@ To find the number of objects (unique) added to a list on each day you can do:
 
 ```sql
 select substr(date_added, 1, 10) as day_added, count(distinct(atlas_id)) from bk_peak group by day_added;
+```
+
+## SALT List [RETIRED -: 202-07-30]
+
+Custom List: 14
+
+**Constraints**
+- Not yet classified
+- VRA Score>9.0
+- NOT `ORPHANS`
+
+**Inputs**
+- Eyeball list. (Not Fast Track. If user wants fast track they can also use the Mookodi Young Trasnients Live List)
+
+
+**Script**: `saltListWizard.py` 
+- **Clean Salt List**: Removes objects that no longer pass our constraints from the Live list
+- **Logs removal from Salt list** in `bk_young_not_fast_track` by adding timestamp of when a given atlas\_id was removed from custom list 14.
+- **Adds alerts to the Salt list** 
+- **Logs adds** in  `bk_young_not_fast_track` by adding timestamp and the **vra score** at time of adding. 
+
+
+### `bk_young_not_fast_track`
+```
+id  atlas_id             date_added           date_removed  vra_score_when_added  version  timestamp          
+--  -------------------  -------------------  ------------  --------------------  -------  -------------------
+8   1141048460225429100  2026-07-06 21:29:23                9.77169                        2026-07-06 21:29:23
 ```

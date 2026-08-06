@@ -1,0 +1,237 @@
+import json
+import os
+from unittest.mock import MagicMock
+import atlas_sao.db as db
+import atlas_sao.slackbot as slackbot
+
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), 'fixtures')
+
+
+def load_fixture(name):
+    with open(os.path.join(FIXTURES_DIR, name)) as f:
+        return json.load(f)
+
+
+class TestResolveSender:
+    def test_bot_message_resolves_from_bot_profile(self):
+        client = MagicMock()
+        message = {'bot_id': 'B123', 'bot_profile': {'name': 'ATLAS SALT Triggers'}}
+        cache = {}
+
+        sender_id, sender_name = slackbot.resolve_sender(message, client, cache)
+        assert (sender_id, sender_name) == ('B123', 'ATLAS SALT Triggers')
+        client.bots_info.assert_not_called()
+
+    def test_human_message_resolves_via_users_info(self):
+        client = MagicMock()
+        client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
+        cache = {}
+
+        sender_id, sender_name = slackbot.resolve_sender({'user': 'U456'}, client, cache)
+        assert (sender_id, sender_name) == ('U456', 'Simon de Wet')
+
+    def test_human_message_caches_across_calls(self):
+        client = MagicMock()
+        client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
+        cache = {}
+
+        slackbot.resolve_sender({'user': 'U456'}, client, cache)
+        slackbot.resolve_sender({'user': 'U456'}, client, cache)
+        client.users_info.assert_called_once()
+
+
+class TestParseBlocksFields:
+    def test_extracts_labelled_fields(self):
+        blocks = [
+            {'type': 'section', 'fields': [
+                {'type': 'mrkdwn', 'text': '*RA / Dec*\n181.71149, -36.26852'},
+                {'type': 'mrkdwn', 'text': '*Latest*\n16.36 o · 2026-07-31 17:45:45 UT'},
+            ]}
+        ]
+        fields = slackbot.parse_blocks_fields(blocks)
+        assert fields == {
+            'RA / Dec': '181.71149, -36.26852',
+            'Latest': '16.36 o · 2026-07-31 17:45:45 UT',
+        }
+
+    def test_ignores_non_section_blocks(self):
+        blocks = [
+            {'type': 'header', 'text': {'type': 'plain_text', 'text': 'not a field'}},
+            {'type': 'divider'},
+        ]
+        assert slackbot.parse_blocks_fields(blocks) == {}
+
+    def test_empty_blocks_returns_empty_dict(self):
+        assert slackbot.parse_blocks_fields([]) == {}
+
+
+class TestParseTelescopeFromText:
+    def test_matches_salt_case_insensitive(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient SALT requests: 2 new target(s)') == 'SALT'
+        assert slackbot.parse_telescope_from_text('atlas transient salt requests') == 'SALT'
+
+    def test_matches_mookodi_case_insensitive(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient Mookodi requests') == 'Mookodi'
+        assert slackbot.parse_telescope_from_text('atlas transient MOOKODI requests') == 'Mookodi'
+
+    def test_no_match_returns_none(self):
+        assert slackbot.parse_telescope_from_text('ATLAS Transient requests') is None
+
+
+class TestParseBotMessage:
+    def test_parses_id_ra_dec_latest_mag(self):
+        message = {
+            'bot_id': 'B123',
+            'text': 'ATLAS Transient SALT requests: 1 new target(s)',
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*RA / Dec*\n181.71149, -36.26852'},
+                    {'type': 'mrkdwn', 'text': '*Latest*\n16.36 o · 2026-07-31 17:45:45 UT'},
+                ]}
+            ]
+        }
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['atlas_id'] == 1120650750361606600
+        assert parsed['ra'] == 181.71149
+        assert parsed['dec'] == -36.26852
+        assert parsed['latest_mag'] == 16.36
+
+    def test_non_integer_id_leaves_atlas_id_none(self):
+        message = {
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\nATLAS26jri'},
+                ]}
+            ]
+        }
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['atlas_id'] is None
+
+    def test_missing_fields_all_none(self):
+        parsed = slackbot.parse_bot_message({'blocks': []})
+        assert parsed == {
+            'telescope': None, 'related_list': None, 'status': None,
+            'atlas_id': None, 'ra': None, 'dec': None, 'latest_mag': None,
+        }
+
+    def test_real_sample_fixture(self):
+        message = load_fixture('slack_sample_bot_message.json')
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['ra'] == 208.30919
+        assert parsed['dec'] == 0.44793
+        assert parsed['latest_mag'] == 16.72
+        assert parsed['atlas_id'] == 1135314261002652300
+        assert parsed['telescope'] == 'SALT'
+        assert parsed['related_list'] == '100Mpc Southern Transients'
+        assert parsed['status'] == 'Triggered'
+
+
+class TestMessageTimeFromTs:
+    def test_converts_to_utc_string(self):
+        assert slackbot.message_time_from_ts('1690833945.001900') == '2023-07-31 20:05:45'
+
+
+class TestFetchNewMessages:
+    def test_single_page(self):
+        client = MagicMock()
+        client.conversations_history.return_value = {
+            'messages': [{'ts': '1'}, {'ts': '2'}],
+            'response_metadata': {'next_cursor': ''},
+        }
+        messages = slackbot.fetch_new_messages(client, 'C123', oldest='0')
+        assert messages == [{'ts': '1'}, {'ts': '2'}]
+        client.conversations_history.assert_called_once_with(channel='C123', limit=200, oldest='0')
+
+    def test_follows_pagination_cursor(self):
+        client = MagicMock()
+        client.conversations_history.side_effect = [
+            {'messages': [{'ts': '1'}], 'response_metadata': {'next_cursor': 'abc'}},
+            {'messages': [{'ts': '2'}], 'response_metadata': {'next_cursor': ''}},
+        ]
+        messages = slackbot.fetch_new_messages(client, 'C123', oldest='0')
+        assert messages == [{'ts': '1'}, {'ts': '2'}]
+        assert client.conversations_history.call_count == 2
+        second_call_kwargs = client.conversations_history.call_args_list[1].kwargs
+        assert second_call_kwargs['cursor'] == 'abc'
+
+    def test_no_oldest_omits_it_from_request(self):
+        client = MagicMock()
+        client.conversations_history.return_value = {
+            'messages': [], 'response_metadata': {'next_cursor': ''},
+        }
+        slackbot.fetch_new_messages(client, 'C123', oldest=None)
+        client.conversations_history.assert_called_once_with(channel='C123', limit=200)
+
+
+class TestProcessMessage:
+    def _make_db(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = str(tmp_path / 'test.db')
+        conn = sqlite3.connect(db_path)
+        schema_path = os.path.join(os.path.dirname(__file__), '..', 'db', 'log.sql')
+        with open(schema_path) as f:
+            conn.executescript(f.read())
+        conn.close()
+        monkeypatch.setattr(db, 'get_connection', lambda path=None: sqlite3.connect(db_path))
+        return db_path
+
+    def test_bot_message_without_profile_is_skipped(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = {'bot_id': 'B123', 'user': 'U0BM9M40WN8', 'ts': '1690833945.001900', 'upload': True}
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
+        conn.close()
+        assert count == 0
+        client.users_info.assert_not_called()
+
+    def test_bot_message_logs_parsed_fields(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = {
+            'bot_id': 'B123',
+            'bot_profile': {'name': 'ATLAS SALT Triggers'},
+            'ts': '1690833945.001900',
+            'text': 'ATLAS Transient SALT requests: 1 new target(s)',
+            'blocks': [
+                {'type': 'section', 'fields': [
+                    {'type': 'mrkdwn', 'text': '*ATLAS ID*\n1120650750361606600'},
+                    {'type': 'mrkdwn', 'text': '*Status*\nTriggered'},
+                    {'type': 'mrkdwn', 'text': '*Trigger source*\nsouth_transients_100mpc'},
+                ]}
+            ],
+        }
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, telescope, related_list, atlas_id, status, raw_text FROM slack_messages'
+        ).fetchone()
+        conn.close()
+        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered', None)
+
+    def test_human_message_logs_raw_text_only(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
+        message = {'user': 'U456', 'ts': '1690833945.001900', 'text': 'SALT confirms trigger on 2026abc'}
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, telescope, atlas_id, raw_text FROM slack_messages'
+        ).fetchone()
+        conn.close()
+        assert row == ('Simon de Wet', None, None, 'SALT confirms trigger on 2026abc')

@@ -140,3 +140,34 @@ class TestGetActiveXtgalIds:
         conn.close()
         ids = db.get_active_xtgal_ids(db_path=db_path)
         assert ids == [1111111111111111111]
+
+
+class TestLogSlackMessage:
+    def test_inserts_row(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              telescope='SALT', atlas_id=1120650750361606600,
+                              db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_id, sender_name, telescope, atlas_id FROM slack_messages'
+        ).fetchone()
+        conn.close()
+        assert row == ('B123', 'ATLAS SALT Triggers', 'SALT', 1120650750361606600)
+
+    def test_duplicate_slack_ts_is_noop(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
+        conn.close()
+        assert count == 1
+
+
+class TestGetLastSlackTs:
+    def test_returns_none_when_empty(self, db_path):
+        assert db.get_last_slack_ts(db_path=db_path) is None
+
+    def test_returns_max_ts(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
+        db.log_slack_message('1690834000.000100', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
+        assert db.get_last_slack_ts(db_path=db_path) == '1690834000.000100'

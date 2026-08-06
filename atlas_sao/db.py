@@ -11,7 +11,7 @@ import sqlite3
 
 
 
-def get_connection(db_path: str = None) -> sqlite3.Connection:
+def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     """Makes connection to sqlite db and returns it.
     Expects that the data base is under the atlas_sao/db/log.db file 
     """
@@ -22,8 +22,8 @@ def get_connection(db_path: str = None) -> sqlite3.Connection:
 
 def log_added(atlas_ids: list, 
               bk_table: str, 
-              vra_scores: dict = None, 
-              db_path: str = None) -> None:
+              vra_scores: dict | None = None,
+              db_path: str | None = None) -> None:
     """Log when ATLAS_ID added to a list - this requires VRA score at time of adding"""
     
     if not atlas_ids:
@@ -45,7 +45,7 @@ def log_added(atlas_ids: list,
 
 def log_removed(atlas_ids: list, 
                 bk_table: str, 
-                db_path: str = None) -> None:
+                db_path: str | None = None) -> None:
     """Log when ATLAS ID removed from a list"""
     if not atlas_ids:
         return
@@ -62,7 +62,7 @@ def log_removed(atlas_ids: list,
 
 
 def upsert_xtgal(atlas_ids: list,
-                 db_path: str = None) -> None:
+                 db_path: str | None = None) -> None:
     """Adds a row to XTGAL table if it doesn't already exist.
 
     Returns
@@ -81,7 +81,7 @@ def upsert_xtgal(atlas_ids: list,
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def deactivate_old_alerts(cutoff_date: str, db_path: str = None) -> None:
+def deactivate_old_alerts(cutoff_date: str, db_path: str | None = None) -> None:
     """Sets status ACTIVE = 0 for alerts with date_added < cutoff_date
     
     Parameters
@@ -98,7 +98,7 @@ def deactivate_old_alerts(cutoff_date: str, db_path: str = None) -> None:
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def get_active_xtgal_ids(db_path: str = None) -> list:
+def get_active_xtgal_ids(db_path: str | None = None) -> list:
     """Utility function to know which alerts are set to active
     
     Returns
@@ -109,6 +109,58 @@ def get_active_xtgal_ids(db_path: str = None) -> list:
         rows = conn.execute('SELECT atlas_id FROM xtgal_watchlist WHERE active = 1').fetchall()
     
     conn.close() # technically not needed because GC would do it, but adding anyways
-    
+
     return [row[0] for row in rows]
+
+
+def log_slack_message(slack_ts: str,
+                       sender_id: str,
+                       sender_name: str,
+                       telescope: str | None = None,
+                       related_list: str | None = None,
+                       raw_text: str | None = None,
+                       raw_blocks: str | None = None,
+                       atlas_id: int | None = None,
+                       ra: float | None = None,
+                       dec: float | None = None,
+                       latest_mag: float | None = None,
+                       status: str | None = None,
+                       message_time: str | None = None,
+                       db_path: str | None = None) -> None:
+    """Adds a new slack message to the slack_messages table.
+
+    Note
+    ----
+    This needs a parser in order to extract the ra, dec, latest_mag etc
+    which are contained within the text fields of the raw_message.
+    """
+    with get_connection(db_path) as conn:
+        conn.execute(
+            'INSERT OR IGNORE INTO slack_messages '
+            '(slack_ts, sender_id, sender_name, telescope, related_list, '
+            'raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (slack_ts, sender_id, sender_name, telescope, related_list,
+             raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time)
+        )
+
+    conn.close() # technically not needed because GC would do it, but adding anyways
+
+
+def get_last_slack_ts(db_path: str | None = None) -> str:
+    """Get the latest slack timemstamp from the slack_messages table. 
+
+    Note
+    ----
+    This is NOT the same as the timestamp added automatically by the table when filling a row
+    it's the timestamp on slack in Unix epoch seconds. Because it has microseconds precision
+    it is unique and slack uses it as a unique key and polling cursor (like a group_id in kafka, 
+    its like our place in the thread so we can poll from slack only recent messages without 
+    missing any!)
+    """
+    with get_connection(db_path) as conn:
+        row = conn.execute('SELECT MAX(slack_ts) FROM slack_messages').fetchone()
+
+    conn.close() 
+    return row[0]
 
