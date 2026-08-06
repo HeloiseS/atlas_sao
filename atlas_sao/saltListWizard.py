@@ -30,7 +30,7 @@ def should_add_to_salt(entry, vra_threshold=SALT_VRA_THRESHOLD, sherlock_exclude
     --------
     True or False
     """
-    if entry['object']['detection_list_id'] == 0:
+    if entry['object']['detection_list_id'] in (0, 11):  # 0=garbage, 11=pm_stars (HPM)
         return False
     # Claude added this for issue #19 (2026-07-21): clean_up() removes on
     # observation_status being set, but this function never checked it -
@@ -108,7 +108,7 @@ def clean_up():
                 if classification == '':
                     classification = None
 
-                if classification is not None or detection_list_id in (0, 5):
+                if classification is not None or detection_list_id in (0, 5, 11):  # 0=garbage, 5=attic, 11=pm_stars (HPM)
                     to_remove.append(atlas_id)
 
             except Exception:

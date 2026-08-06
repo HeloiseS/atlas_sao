@@ -25,6 +25,9 @@ class TestShouldAddToSalt:
     def test_fails_garbage(self):
         assert slw.should_add_to_salt(make_entry(detection_list_id=0)) is False
 
+    def test_fails_hpm(self):
+        assert slw.should_add_to_salt(make_entry(detection_list_id=11)) is False
+
     def test_fails_classified(self):
         assert slw.should_add_to_salt(make_entry(observation_status='mover')) is False
 
@@ -110,6 +113,22 @@ def test_clean_up_removes_attic_members(mock_table, mock_multi):
 
     source_mock = MagicMock()
     source_mock.response_data = [make_entry(detection_list_id=5)]
+    mock_multi.return_value = source_mock
+
+    to_remove = slw.clean_up()
+
+    assert to_remove == ['1234567890123456789']
+
+
+@patch("atlas_sao.saltListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.saltListWizard.ac.RequestCustomListsTable")
+def test_clean_up_removes_hpm_members(mock_table, mock_multi):
+    mock_table.return_value.response_data = [
+        {'transient_object_id': '1234567890123456789', 'object_group_id': 14}
+    ]
+
+    source_mock = MagicMock()
+    source_mock.response_data = [make_entry(detection_list_id=11)]
     mock_multi.return_value = source_mock
 
     to_remove = slw.clean_up()

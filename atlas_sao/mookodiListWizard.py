@@ -21,7 +21,7 @@ logging.basicConfig(
 ### MAIN LOGIC TO ADD TO THE LIST HERE ###
 ##########################################
 def should_add_to_mookodi_live(entry, mag_threshold=MAG_THRESHOLD):
-    if entry['object']['detection_list_id'] == 0:
+    if entry['object']['detection_list_id'] in (0, 11):  # 0=garbage, 11=pm_stars (HPM)
         return False
 
     classification = entry['object'].get('observation_status')
@@ -95,7 +95,7 @@ def clean_up(objectgroupid: int, list_name: str):
                 if classification == '':
                     classification = None
 
-                if classification is not None or detection_list_id in (0, 5):
+                if classification is not None or detection_list_id in (0, 5, 11):  # 0=garbage, 5=attic, 11=pm_stars (HPM)
                     to_remove.append(atlas_id)
 
             except Exception:
