@@ -1,0 +1,28 @@
+{
+  "type": "message",
+  "subtype": "file_share",
+  "ts": "1786093308.000100",
+  "bot_id": "B0BN0APFTC0",
+  "user": "U0BM9M40WN8",
+  "text": "",
+  "upload": true,
+  "files": [
+    {
+      "id": "F0BNS8WEAGH",
+      "created": 1786093308,
+      "timestamp": 1786093308,
+      "mimetype": "text/csv",
+      "filetype": "csv",
+      "pretty_type": "CSV",
+      "user": "U0BM9M40WN8",
+      "size": 31341,
+      "mode": "snippet",
+      "is_public": true,
+      "name": "ATLAS26jij_1_MKD_20260806.0104.csv",
+      "title": "ATLAS26jij (exposure 1/2) spectrum CSV",
+      "url_private": "https://files.slack.com/files-pri/THTTNC3S8-F0BNS8WEAGH/atlas26jij_1_mkd_20260806.0104.csv",
+      "url_private_download": "https://files.slack.com/files-pri/THTTNC3S8-F0BNS8WEAGH/download/atlas26jij_1_mkd_20260806.0104.csv",
+      "permalink": "https://snqub.slack.com/files/U07MZ956U92/F0BNS8WEAGH/atlas26jij_1_mkd_20260806.0104.csv"
+    }
+  ]
+}

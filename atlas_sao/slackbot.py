@@ -1,9 +1,13 @@
-import json
 import logging
+import os
+import re
 from datetime import datetime, timezone
+import requests
 from slack_sdk import WebClient
 import atlas_sao.db as db
 from atlas_sao.slack_config import load_slack_config
+
+SPECTRA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'spectra')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,13 +19,23 @@ logging.basicConfig(
 # ####  PARSER UTILITIES   #### #  
 # ############################# #
 
-def resolve_sender(message: dict, 
-                   client, 
+def resolve_sender(message: dict,
+                   client,
                    cache: dict) -> tuple:
     """Figure out who sent the message"""
     if 'bot_id' in message:
         sender_id = message['bot_id']
-        sender_name = message['bot_profile']['name']
+        if 'bot_profile' in message:
+            # A typical bot message also has the bot profile info
+            sender_name = message['bot_profile']['name']
+        else:
+            # However when the bot sends just file like the csv spectra
+            # it doesn't then we have to use the api to get the 
+            # bot name from its ID.
+            if sender_id not in cache:
+                info = client.bots_info(bot=sender_id)
+                cache[sender_id] = info['bot']['name']
+            sender_name = cache[sender_id]
     else:
         sender_id = message['user']
         # When a human sends a message we have their user ID but not their name 
@@ -92,13 +106,31 @@ def parse_telescope_from_text(text: str) -> str | None:
     return None
 
 
+def parse_object_name(blocks: list) -> str | None:
+    """Claude wrote this for spectrum CSV correlation (2026-08-07)
+
+    Pulls the ATLAS object name (e.g. 'ATLAS26jij') out of the section
+    block's own heading text, e.g. '*ATLAS26jij (exposure 2/2)*  ·  ...'
+    or '*ATLAS26jij*  ·  SN  ·  ...'. This is separate from parse_blocks_fields
+    because the name lives in the section's 'text', not its 'fields' list.
+    """
+    for block in blocks:
+        if block.get('type') != 'section':
+            continue
+        text = block.get('text', {}).get('text', '')
+        match = re.match(r'\*([A-Za-z0-9]+)', text)
+        if match:
+            return match.group(1)
+    return None
+
+
 def parse_bot_message(message: dict) -> dict:
     """Parses a single message from a bot
 
     Returns
     -------
     dictionary with keys:
-    - 'telescope','related_list','atlas_id', 'ra','dec','latest_mag'
+    - 'telescope','related_list','atlas_id','atlas_name','ra','dec','latest_mag','note'
     """
     fields = parse_blocks_fields(message.get('blocks', []))
 
@@ -107,9 +139,14 @@ def parse_bot_message(message: dict) -> dict:
         'related_list': fields.get('Trigger source'),
         'status': fields.get('Status'),
         'atlas_id': None,
+        'atlas_name': parse_object_name(message.get('blocks', [])),
         'ra': None,
         'dec': None,
         'latest_mag': None,
+        # Claude wrote this for the note column (2026-08-07)
+        # Nic's bot writes the literal text 'None' when there's nothing to say,
+        # normalized to a real None/NULL here rather than stored as that string.
+        'note': fields.get('Notes') if fields.get('Notes') not in (None, 'None') else None,
     }
 
     raw_id = fields.get('ATLAS ID')
@@ -190,61 +227,150 @@ def fetch_new_messages(client,
     return messages
 
 
+def find_csv_file(message: dict) -> dict | None:
+    """
+    Gets the file sub-dictionary (under "files" list in the JSON) if it is a csv
+
+    Note
+    ----
+    If there are more than one csv in a message we only return the first one and 
+    log a warning so i can tell Nic there is a problem. 
+    """
+    csv_files = [f for f in message.get('files', []) if f.get('filetype') == 'csv']
+    if len(csv_files) > 1:
+        logging.warning(f"Message has {len(csv_files)} csv files, only using the first: ts={message.get('ts')}")
+    return csv_files[0] if csv_files else None
+
+
+def parse_spectrum_name(title: str) -> str | None:
+    """Extracts the ATLAS name from the title of a message containing the csv file
+
+    Returns
+    -------
+    ATLAS name (NOT ATLAS ID)
+    """
+    # The title is an actual field in the JSON, e.g. 'ATLAS26jij (exposure 1/2) spectrum CSV'
+    # We still require the "(exposure N/M)" part to match so we don't mistake some
+    # other csv title for a spectrum one.
+    match = re.match(r'([A-Za-z0-9]+)\s*\(exposure \d+/\d+\)', title)
+    if not match:
+        logging.warning(f"Could not parse ATLAS name from csv file title: {title!r}")
+        return None
+    return match.group(1)
+
+
+def download_csv_file(url: str, token: str, dest_path: str) -> None:
+    """Slack incantation to downlaod the files
+    """
+
+    # The csv file is located at some slack URL but it isn't public
+    # it's in a url_private_download location. So we need to do 
+    # a special kind of Auth operation using our bot token. 
+    resp = requests.get(url, headers={'Authorization': f'Bearer {token}'})
+    resp.raise_for_status()
+
+    # Create destination repository if does not exists 
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+    with open(dest_path, 'wb') as f:
+        # resp.content is the raw bytes which we can write straight to storage
+        f.write(resp.content)
+
+
+def process_csv_message(message: dict,
+                        csv_file: dict,
+                        sender_id: str,
+                        sender_name: str,
+                        client) -> None:
+    """Processes the messages that contain csv files -> spectra. 
+    """
+    # Get the time of the messages 
+    message_time = message_time_from_ts(message['ts'])
+    # Get the atlas name from the title (Eventually will contain ATLAS ID)
+    atlas_name = parse_spectrum_name(csv_file.get('title', ''))
+
+    atlas_id = None
+    csv_path = None
+
+    # TEMPORARY: turn atlas_name into ATLAS ID. Eventually should ask nic to update title
+    if atlas_name is not None:
+        atlas_id = db.get_atlas_id_by_name(atlas_name)
+        csv_path = os.path.join(SPECTRA_DIR, csv_file['name'])
+        download_csv_file(csv_file['url_private_download'], client.token, csv_path)
+
+    # Add a row to our slack messages with status Spectrum CSV
+    # Save the csv_path to the "Note" column 
+    db.log_slack_message(
+        slack_ts=message['ts'],
+        sender_id=sender_id,
+        sender_name=sender_name,
+        atlas_id=atlas_id,
+        atlas_name=atlas_name,
+        status='Spectrum CSV',
+        note=csv_path,
+        message_time=message_time,
+    )
+
+
 def process_message(message: dict,
                     client,
                     sender_cache: dict) -> None:
     """Fully processes a single slack message
     """
-    if 'bot_id' in message and 'bot_profile' not in message:
-        # Claude wrote this for the bot file-upload skip (2026-08-06)
-        logging.info(f"Skipping bot message with no bot_profile (likely a file upload), ts={message.get('ts')}")
+    # 0. Check if this is a csv message and save the file object (JSON dict with loads of fields)
+    csv_file = find_csv_file(message)
+
+    if csv_file is None and 'bot_id' in message and 'bot_profile' not in message:
+        # Skip file uploads we don't care about storing (e.g. pictures)
+        logging.info(f"Skipping bot message with no bot_profile and no csv file (likely a file upload), ts={message.get('ts')}")
         return
 
-    # 1. Who sent us the message? Bot or User?
+    # 1. Who sent us the message and what's their name?
     sender_id, sender_name = resolve_sender(message, client, sender_cache)
 
-    # 2. Get the "parsed" dictionary with fields of interest
+    # 2. Spectrum CSV file-share messages get their own path - they don't
+    #    look like the usual bot status update / human chat messages
+    if csv_file is not None:
+        process_csv_message(message, csv_file, sender_id, sender_name, client)
+        return
+
+    # 3. Get the "parsed" dictionary with fields of interest
     if 'bot_id' in message:
         parsed = parse_bot_message(message)
         # If it's a bot message we use a specific parser because the json looks different
         # case in point: there is no top level 'text' field to read like in the human
         # messages (see else statement)
-        raw_text = None
-        raw_blocks = json.dumps(message.get('blocks', []))
-        # These raw locks will get parsed later in the function. They include header, dividers,
-        # context, and cruicial section blocks where our text resides
     else:
         # if it wasn't a bot, it was a human
         # We initialize the parsed dictionary with empty values
-        # because we don't yet have the parser, 
+        # because we don't yet have the parser,
         parsed = {'telescope': None,
                   'related_list': None,
                   'status': None,
                   'atlas_id': None,
+                  'atlas_name': None,
                   'ra': None,
                   'dec': None,
-                  'latest_mag': None}
-        
-        raw_text = message.get('text')
-        raw_blocks = None
+                  'latest_mag': None,
+                  'note': None}
 
-    # 3 - Update the slack_messages table
+    # 4 - Update the slack_messages table
     db.log_slack_message(
         slack_ts=message['ts'],
         sender_id=sender_id,
         sender_name=sender_name,
         telescope=parsed['telescope'],
         related_list=parsed['related_list'],
-        raw_text=raw_text,
-        raw_blocks=raw_blocks,
         atlas_id=parsed['atlas_id'],
+        atlas_name=parsed['atlas_name'],
         ra=parsed['ra'],
         dec=parsed['dec'],
         latest_mag=parsed['latest_mag'],
         status=parsed['status'],
+        note=parsed['note'],
         message_time=message_time_from_ts(message['ts']),
     )
-    return 
+    return
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 CLAUDE.md
-
+log.db
 # flock lockfiles created at runtime by bash_prod/*.sh
 bash_prod/.locks/
 
@@ -91,6 +91,9 @@ ipython_config.py
 # IDE stuff
 .idea
 .vscode
+
+# Downloaded spectrum CSVs - actual data, not code
+data/spectra/*.csv
 
 # MY CONFIG FILE WITH MY TOKEN
 api_config_MINE.yaml

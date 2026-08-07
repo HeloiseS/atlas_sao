@@ -46,13 +46,13 @@ CREATE TABLE slack_messages (
     sender_name   TEXT NOT NULL,
     telescope     TEXT,
     related_list  TEXT,
-    raw_text      TEXT,
-    raw_blocks    TEXT,
     atlas_id      INTEGER,
+    atlas_name    TEXT,
     ra            REAL,
     dec           REAL,
     latest_mag    REAL,
     status        TEXT,
+    note          TEXT,
     message_time  TEXT,
     timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

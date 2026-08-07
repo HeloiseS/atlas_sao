@@ -118,13 +118,13 @@ def log_slack_message(slack_ts: str,
                        sender_name: str,
                        telescope: str | None = None,
                        related_list: str | None = None,
-                       raw_text: str | None = None,
-                       raw_blocks: str | None = None,
                        atlas_id: int | None = None,
+                       atlas_name: str | None = None,
                        ra: float | None = None,
                        dec: float | None = None,
                        latest_mag: float | None = None,
                        status: str | None = None,
+                       note: str | None = None,
                        message_time: str | None = None,
                        db_path: str | None = None) -> None:
     """Adds a new slack message to the slack_messages table.
@@ -138,13 +138,34 @@ def log_slack_message(slack_ts: str,
         conn.execute(
             'INSERT OR IGNORE INTO slack_messages '
             '(slack_ts, sender_id, sender_name, telescope, related_list, '
-            'raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time) '
+            'atlas_id, atlas_name, ra, dec, latest_mag, status, note, message_time) '
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (slack_ts, sender_id, sender_name, telescope, related_list,
-             raw_text, raw_blocks, atlas_id, ra, dec, latest_mag, status, message_time)
+             atlas_id, atlas_name, ra, dec, latest_mag, status, note, message_time)
         )
 
     conn.close() # technically not needed because GC would do it, but adding anyways
+
+
+def get_atlas_id_by_name(atlas_name: str, db_path: str | None = None) -> int | None:
+    """Get ATLAS_ID from ATLAS_name
+
+    Note
+    -----
+    This exists because when Nic gives the spectrum in a csv the message only contains
+    the ATLAS name and not ATLAS ID in the title of the message. I will tell nic to fix it
+    but he's away for a week so we need it for now. 
+    """
+    with get_connection(db_path) as conn:
+        row = conn.execute(
+            'SELECT atlas_id FROM slack_messages '
+            'WHERE atlas_name = ? AND atlas_id IS NOT NULL '
+            'ORDER BY id DESC LIMIT 1',
+            (atlas_name,)
+        ).fetchone()
+
+    conn.close() 
+    return row[0] if row else None
 
 
 def get_last_slack_ts(db_path: str | None = None) -> str:

@@ -39,6 +39,15 @@ class TestResolveSender:
         slackbot.resolve_sender({'user': 'U456'}, client, cache)
         client.users_info.assert_called_once()
 
+    def test_bot_message_without_profile_resolves_via_bots_info(self):
+        client = MagicMock()
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
+        cache = {}
+
+        sender_id, sender_name = slackbot.resolve_sender({'bot_id': 'B0BN0APFTC0'}, client, cache)
+        assert (sender_id, sender_name) == ('B0BN0APFTC0', 'Southern Triggers')
+        client.bots_info.assert_called_once_with(bot='B0BN0APFTC0')
+
 
 class TestParseBlocksFields:
     def test_extracts_labelled_fields(self):
@@ -112,7 +121,8 @@ class TestParseBotMessage:
         parsed = slackbot.parse_bot_message({'blocks': []})
         assert parsed == {
             'telescope': None, 'related_list': None, 'status': None,
-            'atlas_id': None, 'ra': None, 'dec': None, 'latest_mag': None,
+            'atlas_id': None, 'atlas_name': None, 'ra': None, 'dec': None, 'latest_mag': None,
+            'note': None,
         }
 
     def test_real_sample_fixture(self):
@@ -122,9 +132,57 @@ class TestParseBotMessage:
         assert parsed['dec'] == 0.44793
         assert parsed['latest_mag'] == 16.72
         assert parsed['atlas_id'] == 1135314261002652300
+        assert parsed['atlas_name'] == 'ATLAS26jij'
         assert parsed['telescope'] == 'SALT'
         assert parsed['related_list'] == '100Mpc Southern Transients'
         assert parsed['status'] == 'Triggered'
+        # Fixture has '*Notes*\nNone' - literal 'None' text normalizes to a real None
+        assert parsed['note'] is None
+
+    def test_notes_field_with_real_content_is_kept(self):
+        message = {'blocks': [
+            {'type': 'section', 'fields': [
+                {'type': 'mrkdwn', 'text': '*Notes*\nRe-triggered after fibre issue'},
+            ]}
+        ]}
+        parsed = slackbot.parse_bot_message(message)
+        assert parsed['note'] == 'Re-triggered after fibre issue'
+
+
+class TestFindCsvFile:
+    def test_finds_csv_among_files(self):
+        message = {'files': [{'filetype': 'fits'}, {'filetype': 'csv', 'title': 'x'}]}
+        assert slackbot.find_csv_file(message) == {'filetype': 'csv', 'title': 'x'}
+
+    def test_no_files_returns_none(self):
+        assert slackbot.find_csv_file({}) is None
+
+    def test_no_csv_among_files_returns_none(self):
+        assert slackbot.find_csv_file({'files': [{'filetype': 'fits'}]}) is None
+
+    def test_multiple_csvs_returns_first_and_warns(self, caplog):
+        message = {'ts': '123', 'files': [
+            {'filetype': 'csv', 'title': 'first'},
+            {'filetype': 'csv', 'title': 'second'},
+        ]}
+        with caplog.at_level('WARNING'):
+            csv_file = slackbot.find_csv_file(message)
+        assert csv_file == {'filetype': 'csv', 'title': 'first'}
+        assert 'only using the first' in caplog.text
+
+    def test_real_sample_fixture(self):
+        message = load_fixture('slack_sample_csv_message.json')
+        csv_file = slackbot.find_csv_file(message)
+        assert csv_file is not None
+        assert csv_file['title'] == 'ATLAS26jij (exposure 1/2) spectrum CSV'
+
+
+class TestParseSpectrumName:
+    def test_parses_name(self):
+        assert slackbot.parse_spectrum_name('ATLAS26jij (exposure 1/2) spectrum CSV') == 'ATLAS26jij'
+
+    def test_unrecognised_title_returns_none(self):
+        assert slackbot.parse_spectrum_name('some other file') is None
 
 
 class TestMessageTimeFromTs:
@@ -214,12 +272,12 @@ class TestProcessMessage:
 
         conn = sqlite3.connect(db_path)
         row = conn.execute(
-            'SELECT sender_name, telescope, related_list, atlas_id, status, raw_text FROM slack_messages'
+            'SELECT sender_name, telescope, related_list, atlas_id, status FROM slack_messages'
         ).fetchone()
         conn.close()
-        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered', None)
+        assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered')
 
-    def test_human_message_logs_raw_text_only(self, monkeypatch, tmp_path):
+    def test_human_message_logs_sender_only(self, monkeypatch, tmp_path):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
 
@@ -231,7 +289,55 @@ class TestProcessMessage:
 
         conn = sqlite3.connect(db_path)
         row = conn.execute(
-            'SELECT sender_name, telescope, atlas_id, raw_text FROM slack_messages'
+            'SELECT sender_name, telescope, atlas_id FROM slack_messages'
         ).fetchone()
         conn.close()
-        assert row == ('Simon de Wet', None, None, 'SALT confirms trigger on 2026abc')
+        assert row == ('Simon de Wet', None, None)
+
+    def test_csv_message_correlates_atlas_id_by_name_and_downloads(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+        spectra_dir = tmp_path / 'spectra'
+        monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
+
+        # A prior "Triggered" row is how we know ATLAS26jij -> atlas_id
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT INTO slack_messages (slack_ts, sender_id, sender_name, atlas_id, atlas_name, status) "
+            "VALUES ('1786093000.000000', 'B0BN0APFTC0', 'Southern Triggers', 1135314261002652300, 'ATLAS26jij', 'Triggered')"
+        )
+        conn.commit()
+        conn.close()
+
+        message = load_fixture('slack_sample_csv_message.json')
+        client = MagicMock()
+        client.token = 'xoxb-fake-token'
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
+        mock_response = MagicMock()
+        mock_response.content = b'wavelength_angs,flux\n4000,1.0\n'
+        mock_get = MagicMock(return_value=mock_response)
+        monkeypatch.setattr(slackbot.requests, 'get', mock_get)
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, atlas_id, atlas_name, status, note FROM slack_messages '
+            "WHERE slack_ts = '1786093308.000100'"
+        ).fetchone()
+        conn.close()
+
+        assert row[0] == 'Southern Triggers'
+        assert row[1] == 1135314261002652300
+        assert row[2] == 'ATLAS26jij'
+        assert row[3] == 'Spectrum CSV'
+        csv_path = row[4]
+        assert csv_path == str(spectra_dir / 'ATLAS26jij_1_MKD_20260806.0104.csv')
+        assert os.path.exists(csv_path)
+        with open(csv_path, 'rb') as f:
+            assert f.read() == b'wavelength_angs,flux\n4000,1.0\n'
+
+        mock_get.assert_called_once_with(
+            'https://files.slack.com/files-pri/THTTNC3S8-F0BNS8WEAGH/download/atlas26jij_1_mkd_20260806.0104.csv',
+            headers={'Authorization': 'Bearer xoxb-fake-token'},
+        )
