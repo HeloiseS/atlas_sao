@@ -15,6 +15,58 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
+# ################# #
+# #### POLLING #### #
+# ################# #
+
+def message_time_from_ts(ts: str) -> str:
+    """Slack ts (timestamp) in Unix Epoch in Seconds - converts to UTC date time"""
+    return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def fetch_new_messages(client,
+                       channel_id: str,
+                       oldest: str | None,
+                       n: int = 200) -> list:
+    """Polls for new messages in the channel
+    
+    Parameters
+    -----------
+    client: slack_sdk.WebClient
+       Slack client
+    channel_id: str
+       The Channel Id
+    oldest: str
+        The last message we polled (slack ts)
+    n: int
+       Max number of messages to look at in a while loop
+    """
+    messages = []
+    cursor = None
+    while True:
+        # Only polling n messages at most in a single loop
+        kwargs = {'channel': channel_id, 'limit': n}
+        if oldest:
+            kwargs['oldest'] = oldest
+        if cursor:
+            # If we end up with a queue longer than n 
+            # we will get a cursor from the metadata to keep our place 
+            # and keep going in the next loop
+            kwargs['cursor'] = cursor
+
+        # Get the response from the client
+        resp = client.conversations_history(**kwargs)
+        messages.extend(resp['messages'])
+        # Guessing slack gives us the next_crusor in the metadata so we
+        # don't have to actually read the contents of the message to find latest slack_ts
+        cursor = resp.get('response_metadata', {}).get('next_cursor')
+
+        # If we didn't get a cursor we are finished! We break from the loop
+        if not cursor:
+            break
+    return messages
+
+
 # ############################# #
 # ####  PARSER UTILITIES   #### #  
 # ############################# #
@@ -51,12 +103,8 @@ def resolve_sender(message: dict,
     return sender_id, sender_name
 
 
-# ############################# #
-# ####        PARSER       #### #  
-# ############################# #
-
 def parse_blocks_fields(blocks: list) -> dict:
-    """Parsers the BLOCKS in a given slack message
+    """Parses the BLOCKS in a given slack message
     That is a techincal term, a specific field name 
     (see tests/fixtures slack_sample_bot_message.json)
 
@@ -124,6 +172,10 @@ def parse_object_name(blocks: list) -> str | None:
     return None
 
 
+# ############################# #
+# ####   BOT TEXT MESSAGE  #### #  
+# ############################# #
+
 def parse_bot_message(message: dict) -> dict:
     """Parses a single message from a bot
 
@@ -175,57 +227,9 @@ def parse_bot_message(message: dict) -> dict:
     return parsed
 
 
-# ################# #
-# #### POLLING #### #
-# ################# #
-
-def message_time_from_ts(ts: str) -> str:
-    """Slack ts (timestamp) in Unix Epoch in Seconds - converts to UTC date time"""
-    return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-
-def fetch_new_messages(client,
-                       channel_id: str,
-                       oldest: str | None,
-                       n: int = 200) -> list:
-    """Polls for new messages in the channel
-    
-    Parameters
-    -----------
-    client: slack_sdk.WebClient
-       Slack client
-    channel_id: str
-       The Channel Id
-    oldest: str
-        The last message we polled (slack ts)
-    n: int
-       Max number of messages to look at in a while loop
-    """
-    messages = []
-    cursor = None
-    while True:
-        # Only polling n messages at most in a single loop
-        kwargs = {'channel': channel_id, 'limit': n}
-        if oldest:
-            kwargs['oldest'] = oldest
-        if cursor:
-            # If we end up with a queue longer than n 
-            # we will get a cursor from the metadata to keep our place 
-            # and keep going in the next loop
-            kwargs['cursor'] = cursor
-
-        # Get the response from the client
-        resp = client.conversations_history(**kwargs)
-        messages.extend(resp['messages'])
-        # Guessing slack gives us the next_crusor in the metadata so we
-        # don't have to actually read the contents of the message to find latest slack_ts
-        cursor = resp.get('response_metadata', {}).get('next_cursor')
-
-        # If we didn't get a cursor we are finished! We break from the loop
-        if not cursor:
-            break
-    return messages
-
+# ############################# #
+# ## PARSE CSV SPECTRA FILES ## #  
+# ############################# #
 
 def find_csv_file(message: dict) -> dict | None:
     """
@@ -240,6 +244,8 @@ def find_csv_file(message: dict) -> dict | None:
     if len(csv_files) > 1:
         logging.warning(f"Message has {len(csv_files)} csv files, only using the first: ts={message.get('ts')}")
     return csv_files[0] if csv_files else None
+
+
 
 
 def parse_csv_message_text(text: str) -> dict:
@@ -280,6 +286,11 @@ def parse_csv_message_text(text: str) -> dict:
     return result
 
 
+
+# ################ #
+# ## PROCESSING ## #  
+# ################ #
+
 def download_csv_file(url: str, token: str, dest_path: str) -> None:
     """Slack incantation to downlaod the files
     """
@@ -296,7 +307,7 @@ def download_csv_file(url: str, token: str, dest_path: str) -> None:
     with open(dest_path, 'wb') as f:
         # resp.content is the raw bytes which we can write straight to storage
         f.write(resp.content)
-
+        
 
 def process_csv_message(message: dict,
                         csv_file: dict,
