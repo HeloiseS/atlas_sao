@@ -242,21 +242,42 @@ def find_csv_file(message: dict) -> dict | None:
     return csv_files[0] if csv_files else None
 
 
-def parse_spectrum_name(title: str) -> str | None:
-    """Extracts the ATLAS name from the title of a message containing the csv file
+def parse_csv_message_text(text: str) -> dict:
+    """Extract the atlas id and atlas name from the messages that contain the
+    spectra files. 
+
+    Note
+    -----
+    There is a little subtely here because the ATLAS name in the title
+    is not always the atlas name. If the name doesn't exist it gets replaced by the id
 
     Returns
     -------
-    ATLAS name (NOT ATLAS ID)
+    dict with keys 'atlas_id' (int or None) and 'atlas_name' (str or None)
     """
-    # The title is an actual field in the JSON, e.g. 'ATLAS26jij (exposure 1/2) spectrum CSV'
-    # We still require the "(exposure N/M)" part to match so we don't mistake some
-    # other csv title for a spectrum one.
-    match = re.match(r'([A-Za-z0-9]+)\s*\(exposure \d+/\d+\)', title)
-    if not match:
-        logging.warning(f"Could not parse ATLAS name from csv file title: {title!r}")
-        return None
-    return match.group(1)
+    result = {'atlas_id': None, 'atlas_name': None}
+
+    # magic reg exc to find the ATLAS ID
+    # the brackets () are the capture group => what comes out from
+    # the .group()
+    #  ATLAS ID + any numer of spaces + any number of digits 
+    id_match = re.search(r'ATLAS ID\s+(\d+)', text)
+    if id_match:
+        result['atlas_id'] = int(id_match.group(1))
+
+    # magic reg ex to find names like ATLAS26jli
+    # Any numbre of characters, each cna be any upper case, lower case or number
+    # note that in ASCII upper and lower case are not continuous, there is 
+    # punctuation in between! So although A-z is valid, it includes things like ! []
+    name_match = re.match(r'\*([A-Za-z0-9]+)', text)
+    if name_match:
+        candidate = name_match.group(1)
+        if candidate != f'id{result["atlas_id"]}':
+            # Checking that we don't have idATLAS_ID 
+            # in place of the name (that's why we find ATLAS ID first!)
+            result['atlas_name'] = candidate
+
+    return result
 
 
 def download_csv_file(url: str, token: str, dest_path: str) -> None:
@@ -284,17 +305,22 @@ def process_csv_message(message: dict,
                         client) -> None:
     """Processes the messages that contain csv files -> spectra. 
     """
-    # Get the time of the messages 
+    # Get the time of the messages
     message_time = message_time_from_ts(message['ts'])
-    # Get the atlas name from the title (Eventually will contain ATLAS ID)
-    atlas_name = parse_spectrum_name(csv_file.get('title', ''))
+    # ATLAS ID in the text of the message. Sometimes it will also contain the name. 
+    # NOTE: Hopefully I can fix nick's code that the ATLAS name will be superfluous
+    parsed = parse_csv_message_text(message.get('text', ''))
+    atlas_id = parsed['atlas_id']
+    atlas_name = parsed['atlas_name']
 
-    atlas_id = None
     csv_path = None
 
-    # TEMPORARY: turn atlas_name into ATLAS ID. Eventually should ask nic to update title
-    if atlas_name is not None:
-        atlas_id = db.get_atlas_id_by_name(atlas_name)
+    if atlas_id is None:
+        # I made the decision that if the ATLAS ID is not there we don't download
+        # I've said countless time the ATLAS ID is crucial, so we are not
+        # handling this gracefully. 
+        logging.warning(f"Could not parse ATLAS ID from csv message text, skipping download: ts={message.get('ts')} text={message.get('text', '')!r}")
+    else:
         csv_path = os.path.join(SPECTRA_DIR, csv_file['name'])
         download_csv_file(csv_file['url_private_download'], client.token, csv_path)
 

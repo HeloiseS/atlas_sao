@@ -15,17 +15,59 @@ There are currently 3 lists of interest:
 
 ## Slack Bot
 
-The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. 
+The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. It has been running in prod on db1 for a few days now (polling into `slack_messages`).
 
 **To-Do**
-- Update the parser for Nic's updated messages 
-- Update the parser to include human parsing. Maybe can give Simon a standard message format.
-- Add to prod when convinced can read messages consistently:
-    - [ ] Stop the wizard cron jobs
-    - [ ] Add `slack_config_MINE.yaml` to prod via scp or copy pasting (NOT ON GH)
-    - [ ] DB migration to include the new table
-    - [ ] Pull the code
-    - [ ] Add bot to cron jobs and restart the list wizards
+- [ ] Simon to confirm he can follow the human message format below for SALT triggers/observations
+- [ ] Build the parser for human messages (Simon's SALT trigger/observed messages) - planned next
+
+### Message format specs
+
+These are the "must-haves" atlas_sao's Slack ingestion (`atlas_sao/slackbot.py`) depends on. If either Nic's bot or a human sender's message stops matching these, parsing breaks - usually silently (a field just comes back `None`/unmatched, not a hard error). Anyone changing message formats on their end should check against this list first, and this file should be kept in sync with the parser whenever the format changes.
+
+#### Bot messages (Nic's Mookodi bot)
+
+**Status report messages** (Triggered / Observed), one ATLAS object per message:
+- Top-level message `text` must mention the telescope name ("SALT" or "Mookodi", case-insensitive, anywhere in the text) - this is how we tag which telescope a message is about.
+- Must contain a Block Kit `section` block whose own heading `text` starts with the ATLAS **name** in bold, e.g. `*ATLAS26jij*` or `*ATLAS26jij (exposure 2/2)*` for multi-exposure reports.
+- That section's `fields` list must use the `*Label*\n<value>` pattern (bold label, newline, value) for each of the following. All are required unless marked optional:
+    - `*ATLAS ID*` - the numeric ATLAS ID. **Required on every message that has one available** - do not rely on ATLAS name alone, we need to be able to identify the object without looking anything up elsewhere.
+    - `*Status*` - e.g. `Triggered`, `Observed`
+    - `*RA / Dec*` - format `<ra>, <dec>` in decimal degrees, comma-separated
+    - `*Latest*` - format `<mag> <filter> · <date> UT`, e.g. `16.72 o · 2026-08-05 17:55:32 UT` - we only parse the leading number
+    - `*Trigger source*` - free text, the custom list name that triggered this
+    - `*Notes*` - free text, or the **literal string `None`** (not `N/A`, `-`, or blank) when there's nothing to say. We normalize exactly that string to a real empty value - anything else gets stored as literal text.
+
+**Spectrum CSV messages** (file-share, one per exposure):
+- Sent as a Slack file share with exactly one CSV file per message. If more than one CSV is ever attached to a single message, only the first is used (we log a warning, the rest are silently dropped) - so please keep it to one CSV per message.
+- The file's `filetype` must be `csv`.
+- The message's top-level `text` (not the file's `title`) must contain `ATLAS ID <id>` - this is what we parse to identify the object. Without it, the CSV is not downloaded and the message is logged with `atlas_id` NULL, on purpose (a missing ID here should be a loud, visible problem, not silently guessed at). e.g. `*ATLAS26jij*  ·  ATLAS ID 1135314261002652300  ·  Observed — quicklook products`.
+- If the text also has a bold `*<name>*` lead-in that's a real ATLAS name (not just `id<ATLAS ID>` echoed back), we store it too - but it's informational only, never required.
+- The file's `name` is saved as-is as the local filename - no format requirement on our end, but please keep it unique per exposure (current convention `<ATLAS name or id>_<exposure>_<frame id>.csv` works fine).
+- Companion PNG files (acquisition / spectrum image / spectrum plot) are currently ignored - not stored anywhere.
+
+#### Human messages (Simon, SALT)
+
+
+For a message to be recognised, it must contain, anywhere in the text (case-insensitive):
+- One of the trigger phrases below, to say what's happening
+- A line `ATLAS ID: <atlas id>` with the numeric ATLAS ID - **always the ID, not just the name** (see above for why this matters)
+
+Trigger phrases:
+- `SALT TRIGGER` - a target has been submitted/triggered on SALT
+- `SALT OBSERVED` - a target has actually been observed on SALT
+
+Example:
+```
+SALT TRIGGER
+ATLAS ID: 1135314261002652300
+```
+```
+SALT OBSERVED
+ATLAS ID: 1135314261002652300
+Notes: seeing was poor, may need a re-do
+```
+The `Notes:` line is optional free text and can be omitted entirely. Everything else in the message (extra chat, @-mentions, etc.) is ignored - we only look for the phrase and the ATLAS ID line.
 
 
 ## Bright 100Mpc Southern Transients

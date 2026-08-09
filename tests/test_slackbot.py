@@ -177,12 +177,19 @@ class TestFindCsvFile:
         assert csv_file['title'] == 'ATLAS26jij (exposure 1/2) spectrum CSV'
 
 
-class TestParseSpectrumName:
-    def test_parses_name(self):
-        assert slackbot.parse_spectrum_name('ATLAS26jij (exposure 1/2) spectrum CSV') == 'ATLAS26jij'
+class TestParseCsvMessageText:
+    def test_parses_id_and_name(self):
+        text = '*ATLAS26jij*  ·  ATLAS ID 1135314261002652300  ·  Observed — quicklook products'
+        result = slackbot.parse_csv_message_text(text)
+        assert result == {'atlas_id': 1135314261002652300, 'atlas_name': 'ATLAS26jij'}
 
-    def test_unrecognised_title_returns_none(self):
-        assert slackbot.parse_spectrum_name('some other file') is None
+    def test_id_placeholder_name_is_not_kept_as_name(self):
+        text = '*id1011551480543323800 (exposure 2/2)*  ·  ATLAS ID 1011551480543323800  ·  Observed — quicklook products'
+        result = slackbot.parse_csv_message_text(text)
+        assert result == {'atlas_id': 1011551480543323800, 'atlas_name': None}
+
+    def test_unrecognised_text_returns_all_none(self):
+        assert slackbot.parse_csv_message_text('some other message') == {'atlas_id': None, 'atlas_name': None}
 
 
 class TestMessageTimeFromTs:
@@ -294,20 +301,11 @@ class TestProcessMessage:
         conn.close()
         assert row == ('Simon de Wet', None, None)
 
-    def test_csv_message_correlates_atlas_id_by_name_and_downloads(self, monkeypatch, tmp_path):
+    def test_csv_message_parses_atlas_id_from_text_and_downloads(self, monkeypatch, tmp_path):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
         spectra_dir = tmp_path / 'spectra'
         monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
-
-        # A prior "Triggered" row is how we know ATLAS26jij -> atlas_id
-        conn = sqlite3.connect(db_path)
-        conn.execute(
-            "INSERT INTO slack_messages (slack_ts, sender_id, sender_name, atlas_id, atlas_name, status) "
-            "VALUES ('1786093000.000000', 'B0BN0APFTC0', 'Southern Triggers', 1135314261002652300, 'ATLAS26jij', 'Triggered')"
-        )
-        conn.commit()
-        conn.close()
 
         message = load_fixture('slack_sample_csv_message.json')
         client = MagicMock()

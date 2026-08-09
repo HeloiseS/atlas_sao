@@ -147,25 +147,6 @@ def log_slack_message(slack_ts: str,
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
-def get_atlas_id_by_name(atlas_name: str, db_path: str | None = None) -> int | None:
-    """Get ATLAS_ID from ATLAS_name
-
-    Note
-    -----
-    This exists because when Nic gives the spectrum in a csv the message only contains
-    the ATLAS name and not ATLAS ID in the title of the message. I will tell nic to fix it
-    but he's away for a week so we need it for now. 
-    """
-    with get_connection(db_path) as conn:
-        row = conn.execute(
-            'SELECT atlas_id FROM slack_messages '
-            'WHERE atlas_name = ? AND atlas_id IS NOT NULL '
-            'ORDER BY id DESC LIMIT 1',
-            (atlas_name,)
-        ).fetchone()
-
-    conn.close() 
-    return row[0] if row else None
 
 
 def get_last_slack_ts(db_path: str | None = None) -> str:
