@@ -204,12 +204,12 @@ def parse_human_message(text: str) -> dict:
     # Just in case typos and we get a mixture of cases
 
     text_lower = text.lower()
-    if 'trigger' in text_lower:
+    if 'fail' in text_lower:
+        parsed['status'] = 'Failed'
+    elif 'trigger' in text_lower:
         parsed['status'] = 'Triggered'
     elif 'observed' in text_lower:
         parsed['status'] = 'Observed'
-    elif 'fail' in text_lower:
-        parsed['status'] = 'Failed'
     else:
         return parsed
 
