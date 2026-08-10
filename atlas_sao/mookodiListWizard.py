@@ -41,6 +41,38 @@ def should_add_to_mookodi_live(entry, mag_threshold=MAG_THRESHOLD):
     return last_mag < mag_threshold
 
 
+def has_gone_stale(entry, n=10):
+    """Looks at last N visits and returns TRUE if all non detections
+
+    Parameters
+    ----------
+    entry: json
+       The data for our atlas id of interest
+    n: int, optional
+       Number of consecutive data points to look at, Default is 10
+    """
+    lc = entry.get('lc', [])
+    lcnondets = entry.get('lcnondets', [])
+
+    # 1. LIST VISITS MJD AND WHETHER THEY ARE DETS OR NON DETS
+    # lc is a list of dict. Each point is it's own dict with key
+    # mjd and is_detection
+    visits = (
+        [{'mjd': point['mjd'], 'is_detection': True} for point in lc]
+        + [{'mjd': point['mjd'], 'is_detection': False} for point in lcnondets]
+    )
+
+    # 2. CHECK IF WE EVEN HAVE ENOUGH DATA POINTS
+    if len(visits) < n:
+        return False
+
+    # 3. SELECT THE LAST N POINTS
+    recent_visits = sorted(visits, key=lambda visit: visit['mjd'])[-n:]
+
+    # Return true IF AND ONLY IF all recent visits are NOT detections
+    return all(not visit['is_detection'] for visit in recent_visits)
+
+
 def add_targets_to_list(array_ids, list_name: str):
     if len(array_ids) == 0:
         return
@@ -59,7 +91,8 @@ def remove_targets_from_list(array_ids, list_name: str, chunk_size: int = 25):
     ac.RemoveFromCustomList(array_ids=np.array(array_ids), list_name=list_name, chunk_size=chunk_size)
 
 
-def clean_up(objectgroupid: int, list_name: str):
+def clean_up(objectgroupid: int,
+             list_name: str):
     try:
         logging.info(f"Fetching {list_name} list (objectgroupid={objectgroupid})...")
         custom_list = ac.RequestCustomListsTable({'objectgroupid': objectgroupid}, get_response=True)
@@ -95,7 +128,10 @@ def clean_up(objectgroupid: int, list_name: str):
                 if classification == '':
                     classification = None
 
-                if classification is not None or detection_list_id in (0, 5, 11):  # 0=garbage, 5=attic, 11=pm_stars (HPM)
+                if classification is not None or detection_list_id in (0, 5, 11):  
+                    # 0=garbage, 5=attic, 11=pm_stars (HPM)
+                    to_remove.append(atlas_id)
+                elif has_gone_stale(entry):
                     to_remove.append(atlas_id)
 
             except Exception:

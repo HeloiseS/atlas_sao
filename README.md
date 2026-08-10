@@ -17,10 +17,6 @@ There are currently 3 lists of interest:
 
 The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. It has been running in prod on db1 for a few days now (polling into `slack_messages`).
 
-**To-Do**
-- [ ] Simon to confirm he can follow the human message format below for SALT/Mookodi triggers/observations
-- [x] Build the parser for human messages (Simon's SALT/Mookodi trigger/observed messages)
-
 ### Message format specs
 
 These are the "must-haves" atlas_sao's Slack ingestion (`atlas_sao/slackbot.py`) depends on. If either Nic's bot or a human sender's message stops matching these, parsing breaks - usually silently (a field just comes back `None`/unmatched, not a hard error). Anyone changing message formats on their end should check against this list first, and this file should be kept in sync with the parser whenever the format changes.
@@ -82,8 +78,19 @@ ATLAS ID: 1135314261002652300
 ```
 The `Notes:` line is optional free text and can be omitted entirely. Everything else in the message (extra chat, @-mentions, etc.) is ignored - we only look for the `REPORT` tag, the status/telescope keywords, and the ATLAS ID line.
 
+## Lists
 
-## Bright 100Mpc Southern Transients
+### 100Mpc Southern Transients
+Custom List: 2
+
+**Constraints**
+- Not yet classified
+- VRA Score > 8.5 
+- <100Mpc 
+- Last 10 visits NOT non detections
+
+
+### Bright 100Mpc Southern Transients
 Custom List: 16
 
 **Constraints**
@@ -91,6 +98,7 @@ Custom List: 16
 - Not yet classified
 - VRA Score>8.5 (from input)
 - <100Mpc (from input)
+- Last 10 visits NOT non detections
 
 **Inputs**
 - Mookodi Stageing list (populated by Ken's ingest script - Fast Track and VRA Score>8.5)
@@ -102,7 +110,7 @@ Custom List: 16
 - **Adds alerts to the Live list** 
 - **Logs adds** in  `bk_young_fast_track` by adding timestamp and the **vra score** at time of adding. 
 
-### `bk_young_fast_track`
+#### `bk_young_fast_track`
 
 ```
 id  atlas_id             date_added           date_removed  vra_score_when_added  version  timestamp          
@@ -111,11 +119,11 @@ id  atlas_id             date_added           date_removed  vra_score_when_added
 ```
 
 
-### Why is there a staging list and a live list?
+#### Why is there a staging list and a live list?
 Because the staging list used to be where Mookodi would get its feed from but it would very often take spectra of objects that are too faint. The Live lists is only filled with objects that reach a certain magnitude threshold (and are yet unclassified).
 
 
-## Southern Transients at Peak
+### Southern Transients at Peak
 
 Custom List: 17
 
@@ -147,7 +155,7 @@ For now we will use a dumb placeholder: **brighter than 16.9 mag**. Why? because
 - **Logs adds** in  `bk_peak` by adding timestamp and the **vra score** at time of adding. 
 
 
-### `bk_peak`
+#### `bk_peak`
 
 ```
 id  atlas_id             date_added           date_removed  vra_score_when_added  version  timestamp          
@@ -155,7 +163,7 @@ id  atlas_id             date_added           date_removed  vra_score_when_added
 25  1200738260210707300  2026-07-01 15:17:23                                               2026-07-01 15:17:23
 ```
 
-### `xtgal_watchlist`
+#### `xtgal_watchlist`
 
 ```
 id    atlas_id             active  date_added           last_mag  last_mag_err  last_mag_filt  timestamp          

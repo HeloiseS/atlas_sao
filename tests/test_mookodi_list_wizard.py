@@ -61,6 +61,56 @@ class TestShouldAddToMookodiLive:
         assert mlw.should_add_to_mookodi_live(make_entry(last_mag=14.9), mag_threshold=15.0) is True
 
 
+class TestHasGoneStale:
+    def _entry(self, lc_mjds=(), nondet_mjds=()):
+        return {
+            'lc': [{'mjd': mjd} for mjd in lc_mjds],
+            'lcnondets': [{'mjd': mjd} for mjd in nondet_mjds],
+        }
+
+    def test_fewer_than_n_visits_is_not_stale(self):
+        entry = self._entry(nondet_mjds=range(1, 9))
+        assert mlw.has_gone_stale(entry) is False
+
+    def test_ten_consecutive_nondetections_is_stale(self):
+        entry = self._entry(nondet_mjds=range(1, 11))
+        assert mlw.has_gone_stale(entry) is True
+
+    def test_detection_among_last_ten_is_not_stale(self):
+        entry = self._entry(lc_mjds=[5], nondet_mjds=[1, 2, 3, 4, 6, 7, 8, 9, 10])
+        assert mlw.has_gone_stale(entry) is False
+
+    def test_old_nondetections_before_recent_detection_is_not_stale(self):
+        # 9 old non-detections then 1 recent detection - the most recent visit
+        # overall is a detection, so this is not stale regardless of what came before
+        entry = self._entry(lc_mjds=[100], nondet_mjds=range(1, 10))
+        assert mlw.has_gone_stale(entry) is False
+
+    def test_custom_n(self):
+        entry = self._entry(nondet_mjds=range(1, 4))
+        assert mlw.has_gone_stale(entry, n=3) is True
+        assert mlw.has_gone_stale(entry, n=4) is False
+
+
+@patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
+def test_clean_up_removes_stale_members(mock_table, mock_multi):
+    mock_table.return_value.response_data = [
+        {'transient_object_id': '1234567890123456789', 'object_group_id': 16}
+    ]
+
+    entry = make_entry()
+    entry['lcnondets'] = [{'mjd': mjd} for mjd in range(1, 11)]
+    entry['lc'] = []
+    source_mock = MagicMock()
+    source_mock.response_data = [entry]
+    mock_multi.return_value = source_mock
+
+    to_remove = mlw.clean_up(objectgroupid=16, list_name='bright_south_transients_100mpc')
+
+    assert to_remove == ['1234567890123456789']
+
+
 @patch("atlas_sao.mookodiListWizard.ac.WriteToCustomList")
 def test_add_targets_to_list_calls_write_once_with_array(mock_write):
     mlw.add_targets_to_list([111, 222], "bright_south_transients_100mpc")
