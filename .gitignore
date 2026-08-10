@@ -1,5 +1,7 @@
 CLAUDE.md
-log.db
+# SQLite database file
+*.db
+
 # flock lockfiles created at runtime by bash_prod/*.sh
 bash_prod/.locks/
 

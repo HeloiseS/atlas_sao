@@ -173,7 +173,79 @@ def parse_object_name(blocks: list) -> str | None:
 
 
 # ############################# #
-# ####   BOT TEXT MESSAGE  #### #  
+# ##  HUMAN TEXT MESSAGE   #### #
+# ############################# #
+
+def parse_human_message(text: str) -> dict:
+    """Parsing the human messages with a given report formatting
+    This is because SALT triggers are human initiated so Simon or 
+    someone else will feedback directly to the bot channel when a trigger
+    occurs and is successful.
+    """
+    parsed = {
+        'telescope': None,
+        'related_list': None,
+        'status': None,
+        'atlas_id': None,
+        'atlas_name': None,
+        'ra': None,
+        'dec': None,
+        'latest_mag': None,
+        'note': None,
+    }
+
+    # We look for the REPORT keyword at the START of the message
+    # otherwise ignore. This is to avoid makring a salt trigger
+    # in the db from casual chat in the comments or threads 
+    # that may sprout in the slack bot channel. 
+    if not re.search(r'^\s*REPORT\s*$', text, re.IGNORECASE | re.MULTILINE):
+        return parsed
+
+    # Just in case typos and we get a mixture of cases
+
+    text_lower = text.lower()
+    if 'trigger' in text_lower:
+        parsed['status'] = 'Triggered'
+    elif 'observed' in text_lower:
+        parsed['status'] = 'Observed'
+    elif 'fail' in text_lower:
+        parsed['status'] = 'Failed'
+    else:
+        return parsed
+
+    if 'salt' in text_lower:
+        parsed['telescope'] = 'SALT'
+    elif 'mookodi' in text_lower or 'lesedi' in text_lower:
+        parsed['telescope'] = 'Mookodi'
+    else:
+        return parsed
+
+    # Here the brackets are doing a lot of work. 
+    # If I have (\d{19})?!\d, regex would see first 
+    # (\d{19})? which means "match 1 or 0 of the syntax in these brackets (19 digits here)"
+    # but (? means that this group in the brackets is special. What kinda special 
+    # depends on the next character. ! after (? means we're doing a negative lookahead
+    # we are looking at the next character and trying to NOT match the pattern
+    # here the pattern is \d, a digit. 
+    # overall we and ATLAS ID: -> SPACE -> 19 digits -> ANYTHING BUT A DIGIT 
+    # So we're making sure we have 19 digits in our atlas ID, no more no less. 
+    id_match = re.search(r'ATLAS ID:\s*(\d{19})(?!\d)', text, re.IGNORECASE)
+    if id_match is None:
+        logging.error("Human REPORT detected but not valid ATLAS ID found. " \
+        "Either it was not provided or it was not 19 digits long")
+        return parsed
+
+    parsed['atlas_id'] = int(id_match.group(1))
+
+    note_match = re.search(r'Notes:\s*(.+)', text, re.IGNORECASE)
+    if note_match:
+        parsed['note'] = note_match.group(1).strip()
+
+    return parsed
+
+
+# ############################# #
+# ####   BOT TEXT MESSAGE  #### #
 # ############################# #
 
 def parse_bot_message(message: dict) -> dict:
@@ -195,7 +267,7 @@ def parse_bot_message(message: dict) -> dict:
         'ra': None,
         'dec': None,
         'latest_mag': None,
-        # Claude wrote this for the note column (2026-08-07)
+        # Claude wrote this for the note column (2026-08-07) and HFS read and approved. 
         # Nic's bot writes the literal text 'None' when there's nothing to say,
         # normalized to a real None/NULL here rather than stored as that string.
         'note': fields.get('Notes') if fields.get('Notes') not in (None, 'None') else None,
@@ -378,18 +450,9 @@ def process_message(message: dict,
         # case in point: there is no top level 'text' field to read like in the human
         # messages (see else statement)
     else:
-        # if it wasn't a bot, it was a human
-        # We initialize the parsed dictionary with empty values
-        # because we don't yet have the parser,
-        parsed = {'telescope': None,
-                  'related_list': None,
-                  'status': None,
-                  'atlas_id': None,
-                  'atlas_name': None,
-                  'ra': None,
-                  'dec': None,
-                  'latest_mag': None,
-                  'note': None}
+        # if no bot id it's a human, and we go and check or the REPORT 
+        # keyword and extract relevant fields. 
+        parsed = parse_human_message(message.get('text', ''))
 
     # 4 - Update the slack_messages table
     db.log_slack_message(
