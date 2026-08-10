@@ -149,6 +149,75 @@ class TestParseBotMessage:
         assert parsed['note'] == 'Re-triggered after fibre issue'
 
 
+class TestParseHumanMessage:
+    def test_no_report_tag_is_ignored(self):
+        text = 'SALT TRIGGER\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['telescope'] is None
+        assert parsed['status'] is None
+        assert parsed['atlas_id'] is None
+
+    def test_casual_chat_mentioning_trigger_is_ignored(self):
+        text = 'did you catch the salt trigger yesterday? ATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['atlas_id'] is None
+
+    def test_report_salt_trigger(self):
+        text = 'REPORT\nSALT TRIGGER\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['telescope'] == 'SALT'
+        assert parsed['status'] == 'Triggered'
+        assert parsed['atlas_id'] == 1135314261002652300
+        assert parsed['note'] is None
+
+    def test_report_salt_observed_with_notes(self):
+        text = ('REPORT\nSALT OBSERVED\nATLAS ID: 1135314261002652300\n'
+                 'Notes: seeing was poor, may need a re-do')
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['status'] == 'Observed'
+        assert parsed['note'] == 'seeing was poor, may need a re-do'
+
+    def test_report_fail_status(self):
+        text = 'REPORT\nSALT FAILED\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['status'] == 'Failed'
+
+    def test_report_mookodi(self):
+        text = 'REPORT\nMOOKODI TRIGGER\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['telescope'] == 'Mookodi'
+
+    def test_report_lesedi_synonym_for_mookodi(self):
+        text = 'REPORT\nLESEDI TRIGGER\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['telescope'] == 'Mookodi'
+
+    def test_report_missing_status_keyword_is_ignored(self):
+        text = 'REPORT\nSALT ATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['status'] is None
+        assert parsed['telescope'] is None
+
+    def test_report_missing_telescope_keyword_is_ignored(self):
+        text = 'REPORT\nTRIGGERED\nATLAS ID: 1135314261002652300'
+        parsed = slackbot.parse_human_message(text)
+        assert parsed['status'] == 'Triggered'
+        assert parsed['telescope'] is None
+
+    def test_report_short_atlas_id_leaves_atlas_id_none(self, caplog):
+        text = 'REPORT\nSALT TRIGGER\nATLAS ID: 113531426100265230'
+        with caplog.at_level('ERROR'):
+            parsed = slackbot.parse_human_message(text)
+        assert parsed['atlas_id'] is None
+        assert 'not valid ATLAS ID found' in caplog.text
+
+    def test_report_long_atlas_id_leaves_atlas_id_none(self, caplog):
+        text = 'REPORT\nSALT TRIGGER\nATLAS ID: 11353142610026523001'
+        with caplog.at_level('ERROR'):
+            parsed = slackbot.parse_human_message(text)
+        assert parsed['atlas_id'] is None
+
+
 class TestFindCsvFile:
     def test_finds_csv_among_files(self):
         message = {'files': [{'filetype': 'fits'}, {'filetype': 'csv', 'title': 'x'}]}

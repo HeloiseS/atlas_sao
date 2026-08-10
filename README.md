@@ -18,8 +18,8 @@ There are currently 3 lists of interest:
 The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. It has been running in prod on db1 for a few days now (polling into `slack_messages`).
 
 **To-Do**
-- [ ] Simon to confirm he can follow the human message format below for SALT triggers/observations
-- [ ] Build the parser for human messages (Simon's SALT trigger/observed messages) - planned next
+- [ ] Simon to confirm he can follow the human message format below for SALT/Mookodi triggers/observations
+- [x] Build the parser for human messages (Simon's SALT/Mookodi trigger/observed messages)
 
 ### Message format specs
 
@@ -46,28 +46,41 @@ These are the "must-haves" atlas_sao's Slack ingestion (`atlas_sao/slackbot.py`)
 - The file's `name` is saved as-is as the local filename - no format requirement on our end, but please keep it unique per exposure (current convention `<ATLAS name or id>_<exposure>_<frame id>.csv` works fine).
 - Companion PNG files (acquisition / spectrum image / spectrum plot) are currently ignored - not stored anywhere.
 
-#### Human messages (Simon, SALT)
+#### Human messages (Simon, SALT and Mookodi)
 
+For a message to be recognised as a real report (and not casual chat in the bot channel that happens to mention a keyword like "trigger"), it must contain, anywhere in the text (case-insensitive):
+- A line that is just `REPORT` on its own - this is the tag that says "this is a real report, not chat". No message gets parsed without it. `REPORT` is meant as the general tag for any kind of human report, not just SALT triggers.
+- One status keyword (see below), to say what's happening
+- One telescope keyword (see below), to say which telescope this is about
+- A line `ATLAS ID: <atlas id>` with the numeric ATLAS ID, **exactly 19 digits** - **always the ID, not just the name** (see above for why this matters). A missing or wrong-length ID does not get silently guessed at - it's logged as an error and the message is dropped.
 
-For a message to be recognised, it must contain, anywhere in the text (case-insensitive):
-- One of the trigger phrases below, to say what's happening
-- A line `ATLAS ID: <atlas id>` with the numeric ATLAS ID - **always the ID, not just the name** (see above for why this matters)
+Status keywords - the message just needs to contain the word (case-insensitive), not an exact phrase:
+- `trigger` - a target has been submitted/triggered
+- `observed` - a target has actually been observed
+- `fail` - the trigger/observation failed
 
-Trigger phrases:
-- `SALT TRIGGER` - a target has been submitted/triggered on SALT
-- `SALT OBSERVED` - a target has actually been observed on SALT
+Telescope keywords - same, just the word anywhere in the text:
+- `salt` - SALT
+- `mookodi` or `lesedi` - Mookodi (Lesedi is the telescope hosting the Mookodi instrument, used as a synonym)
 
 Example:
 ```
+REPORT
 SALT TRIGGER
 ATLAS ID: 1135314261002652300
 ```
 ```
+REPORT
 SALT OBSERVED
 ATLAS ID: 1135314261002652300
 Notes: seeing was poor, may need a re-do
 ```
-The `Notes:` line is optional free text and can be omitted entirely. Everything else in the message (extra chat, @-mentions, etc.) is ignored - we only look for the phrase and the ATLAS ID line.
+```
+REPORT
+MOOKODI TRIGGER FAILED
+ATLAS ID: 1135314261002652300
+```
+The `Notes:` line is optional free text and can be omitted entirely. Everything else in the message (extra chat, @-mentions, etc.) is ignored - we only look for the `REPORT` tag, the status/telescope keywords, and the ATLAS ID line.
 
 
 ## Bright 100Mpc Southern Transients
