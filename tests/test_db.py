@@ -155,12 +155,41 @@ class TestLogSlackMessage:
         assert row == ('B123', 'ATLAS SALT Triggers', 'SALT', 1120650750361606600)
 
     def test_duplicate_slack_ts_is_noop(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              atlas_id=1120650750361606600, db_path=db_path)
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              atlas_id=1120650750361606600, db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
+        conn.close()
+        assert count == 1
+
+    def test_duplicate_slack_ts_with_null_atlas_id_is_not_deduped(self, db_path):
+        # Claude wrote this for issue #37 (2026-08-14): UNIQUE(slack_ts, atlas_id)
+        # doesn't catch this because SQL treats every NULL as distinct - see #37 discussion.
         db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
         db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers', db_path=db_path)
         conn = sqlite3.connect(db_path)
         count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
         conn.close()
-        assert count == 1
+        assert count == 2
+
+    def test_successful_insert_logs_at_info(self, db_path, caplog):
+        # Claude wrote this for the logging review (2026-08-14)
+        with caplog.at_level('INFO'):
+            db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                                  atlas_id=1120650750361606600, status='Triggered', db_path=db_path)
+        assert 'Logged slack message' in caplog.text
+        assert '1120650750361606600' in caplog.text
+
+    def test_ignored_duplicate_does_not_log_at_info(self, db_path, caplog):
+        # Claude wrote this for the logging review (2026-08-14)
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              atlas_id=1120650750361606600, db_path=db_path)
+        with caplog.at_level('INFO'):
+            db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                                  atlas_id=1120650750361606600, db_path=db_path)
+        assert 'Logged slack message' not in caplog.text
 
 
 class TestGetLastSlackTs:

@@ -110,7 +110,7 @@ def parse_blocks_fields(blocks: list) -> dict:
 
     Returns
     -------
-    Dictionary of 
+    Dictionary of our fields
     """
     fields = {}
 
@@ -145,7 +145,6 @@ def parse_blocks_fields(blocks: list) -> dict:
 
 
 def parse_telescope_from_text(text: str) -> str | None:
-    """# Claude wrote this for the Nic bot format change (2026-08-06)"""
     text_lower = text.lower()
     if 'salt' in text_lower:
         return 'SALT'
@@ -176,13 +175,10 @@ def parse_object_name(blocks: list) -> str | None:
 # ##  HUMAN TEXT MESSAGE   #### #
 # ############################# #
 
-def parse_human_message(text: str) -> dict:
-    """Parsing the human messages with a given report formatting
-    This is because SALT triggers are human initiated so Simon or 
-    someone else will feedback directly to the bot channel when a trigger
-    occurs and is successful.
-    """
-    parsed = {
+# Claude wrote this for issue #37 (2026-08-14): a single Slack message can
+# contain more than one REPORT block, so parsing now happens per-block.
+def _empty_human_report() -> dict:
+    return {
         'telescope': None,
         'related_list': None,
         'status': None,
@@ -194,12 +190,9 @@ def parse_human_message(text: str) -> dict:
         'note': None,
     }
 
-    # We look for the REPORT keyword at the START of the message
-    # otherwise ignore. This is to avoid makring a salt trigger
-    # in the db from casual chat in the comments or threads 
-    # that may sprout in the slack bot channel. 
-    if not re.search(r'^\s*REPORT\s*$', text, re.IGNORECASE | re.MULTILINE):
-        return parsed
+
+def _parse_report_block(text: str) -> dict:
+    parsed = _empty_human_report()
 
     # Just in case typos and we get a mixture of cases
 
@@ -244,30 +237,66 @@ def parse_human_message(text: str) -> dict:
     return parsed
 
 
+def parse_human_message(text: str) -> list[dict]:
+    """Parsing the human messages with a given report formatting
+    This is because SALT triggers are human initiated so Simon or 
+    someone else will feedback directly to the bot channel when a trigger
+    occurs and is successful.
+
+    Returns
+    -------
+    One parsed dict per REPORT block found in the message (see #37 - a
+    single message can batch multiple reports). If the message has no
+    REPORT block at all (casual chat) a single all-None dict is returned,
+    same shape as before.
+    """
+    # We look for the REPORT keyword at the START of the message
+    # otherwise ignore. This is to avoid makring a salt trigger
+    # in the db from casual chat in the comments or threads 
+    # that may sprout in the slack bot channel. 
+    report_starts = [m.start() for m in re.finditer(r'^\s*REPORT\s*$', text, re.IGNORECASE | re.MULTILINE)]
+    if not report_starts:
+        return [_empty_human_report()]
+
+    blocks = [
+        text[start:report_starts[i + 1] if i + 1 < len(report_starts) else len(text)]
+        for i, start in enumerate(report_starts)
+    ]
+
+    return [_parse_report_block(block) for block in blocks]
+
+
 # ############################# #
 # ####   BOT TEXT MESSAGE  #### #
 # ############################# #
 
-def parse_bot_message(message: dict) -> dict:
-    """Parses a single message from a bot
-
-    Returns
-    -------
-    dictionary with keys:
-    - 'telescope','related_list','atlas_id','atlas_name','ra','dec','latest_mag','note'
-    """
-    fields = parse_blocks_fields(message.get('blocks', []))
-
-    parsed = {
-        'telescope': parse_telescope_from_text(message.get('text', '')),
-        'related_list': fields.get('Trigger source'),
-        'status': fields.get('Status'),
+def _empty_bot_report(telescope: str | None) -> dict:
+    return {
+        'telescope': telescope,
+        'related_list': None,
+        'status': None,
         'atlas_id': None,
-        'atlas_name': parse_object_name(message.get('blocks', [])),
+        'atlas_name': None,
         'ra': None,
         'dec': None,
         'latest_mag': None,
-        # Claude wrote this for the note column (2026-08-07) and HFS read and approved. 
+        'note': None,
+    }
+
+
+def _parse_bot_report_section(section: dict, telescope: str | None) -> dict:
+    fields = parse_blocks_fields([section])
+
+    parsed = {
+        'telescope': telescope,
+        'related_list': fields.get('Trigger source'),
+        'status': fields.get('Status'),
+        'atlas_id': None,
+        'atlas_name': parse_object_name([section]),
+        'ra': None,
+        'dec': None,
+        'latest_mag': None,
+        # Claude wrote this for the note column (2026-08-07) and HFS read and approved.
         # Nic's bot writes the literal text 'None' when there's nothing to say,
         # normalized to a real None/NULL here rather than stored as that string.
         'note': fields.get('Notes') if fields.get('Notes') not in (None, 'None') else None,
@@ -297,6 +326,31 @@ def parse_bot_message(message: dict) -> dict:
             logging.warning(f"Slack bot message 'Latest' field not parseable: {latest!r}")
 
     return parsed
+
+
+def parse_bot_message(message: dict) -> list[dict]:
+    """Parses a single message from a bot
+
+    Returns
+    -------
+    list of dictionaries, one per target/report section in the message, each with keys:
+    - 'telescope','related_list','atlas_id','atlas_name','ra','dec','latest_mag','note'
+    """
+    telescope = parse_telescope_from_text(message.get('text', ''))
+    # if several targets reported on there is one section PER TARGET. 
+    # If we don't look for multiple sections then we only record the last object
+    # mentioned in the message because it overwrites all the fields 
+    # Here we make a list of the fields for each section. 
+    sections = [
+        block for block in message.get('blocks', [])
+        if block.get('type') == 'section' and 'fields' in block
+    ]
+
+    if not sections:
+        return [_empty_bot_report(telescope)]
+
+    # Then we parse each section one by one
+    return [_parse_bot_report_section(section, telescope) for section in sections]
 
 
 # ############################# #
@@ -379,7 +433,10 @@ def download_csv_file(url: str, token: str, dest_path: str) -> None:
     with open(dest_path, 'wb') as f:
         # resp.content is the raw bytes which we can write straight to storage
         f.write(resp.content)
-        
+
+    # Claude wrote this for the logging review (2026-08-14): confirm the save
+    # actually happened - this was the one silent success path in the CSV flow.
+    logging.info(f"Saved spectrum CSV -> {dest_path} ({len(resp.content)} bytes)")
 
 def process_csv_message(message: dict,
                         csv_file: dict,
@@ -425,51 +482,74 @@ def process_message(message: dict,
                     client,
                     sender_cache: dict) -> None:
     """Fully processes a single slack message
+
     """
+    message_time = message_time_from_ts(message['ts'])
     # 0. Check if this is a csv message and save the file object (JSON dict with loads of fields)
     csv_file = find_csv_file(message)
-
-    if csv_file is None and 'bot_id' in message and 'bot_profile' not in message:
-        # Skip file uploads we don't care about storing (e.g. pictures)
-        logging.info(f"Skipping bot message with no bot_profile and no csv file (likely a file upload), ts={message.get('ts')}")
-        return
 
     # 1. Who sent us the message and what's their name?
     sender_id, sender_name = resolve_sender(message, client, sender_cache)
 
-    # 2. Spectrum CSV file-share messages get their own path - they don't
-    #    look like the usual bot status update / human chat messages
-    if csv_file is not None:
-        process_csv_message(message, csv_file, sender_id, sender_name, client)
-        return
+    try:
+        if csv_file is None and 'bot_id' in message and 'bot_profile' not in message:
+            # Skip file uploads we don't care about storing (e.g. pictures)
+            note = "Ignore: likely image upload"
+            logging.info(f"{note}, ts={message.get('ts')}, time={message_time}")
+            db.log_slack_message(
+                slack_ts=message['ts'],
+                sender_id=sender_id,
+                sender_name=sender_name,
+                note=note,
+                message_time=message_time,
+            )
+            return
 
-    # 3. Get the "parsed" dictionary with fields of interest
-    if 'bot_id' in message:
-        parsed = parse_bot_message(message)
-        # If it's a bot message we use a specific parser because the json looks different
-        # case in point: there is no top level 'text' field to read like in the human
-        # messages (see else statement)
-    else:
-        # if no bot id it's a human, and we go and check or the REPORT 
-        # keyword and extract relevant fields. 
-        parsed = parse_human_message(message.get('text', ''))
+        # 2. Spectrum CSV file-share messages get their own path - they don't
+        #    look like the usual bot status update / human chat messages
+        if csv_file is not None:
+            process_csv_message(message, csv_file, sender_id, sender_name, client)
+            return
 
-    # 4 - Update the slack_messages table
-    db.log_slack_message(
-        slack_ts=message['ts'],
-        sender_id=sender_id,
-        sender_name=sender_name,
-        telescope=parsed['telescope'],
-        related_list=parsed['related_list'],
-        atlas_id=parsed['atlas_id'],
-        atlas_name=parsed['atlas_name'],
-        ra=parsed['ra'],
-        dec=parsed['dec'],
-        latest_mag=parsed['latest_mag'],
-        status=parsed['status'],
-        note=parsed['note'],
-        message_time=message_time_from_ts(message['ts']),
-    )
+        # 3. Get the parsed report(s) of interest. Both bot and human messages
+        #    can batch more than one report into a single message (#37), so both
+        #    parse_bot_message and parse_human_message return a list.
+        if 'bot_id' in message:
+            parsed_list = parse_bot_message(message)
+            # If it's a bot message we use a specific parser because the json looks different
+            # case in point: there is no top level 'text' field to read like in the human
+            # messages (see else statement)
+        else:
+            # if no bot id it's a human, and we go and check or the REPORT
+            # keyword and extract relevant fields.
+            parsed_list = parse_human_message(message.get('text', ''))
+
+        # 4 - Update the slack_messages table, one row per parsed report
+        for parsed in parsed_list:
+            db.log_slack_message(
+                slack_ts=message['ts'],
+                sender_id=sender_id,
+                sender_name=sender_name,
+                telescope=parsed['telescope'],
+                related_list=parsed['related_list'],
+                atlas_id=parsed['atlas_id'],
+                atlas_name=parsed['atlas_name'],
+                ra=parsed['ra'],
+                dec=parsed['dec'],
+                latest_mag=parsed['latest_mag'],
+                status=parsed['status'],
+                note=parsed['note'],
+                message_time=message_time,
+            )
+    except Exception as exc:
+        logging.exception(f"Failed to process Slack message ts={message.get('ts')}, time={message_time}")
+        db.log_slack_message(
+            slack_ts=message['ts'],
+            sender_id=sender_id,
+            sender_name=sender_name,
+            note=str(exc),
+            message_time=message_time,
+        )
     return
 
 

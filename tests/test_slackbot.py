@@ -101,10 +101,11 @@ class TestParseBotMessage:
             ]
         }
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['atlas_id'] == 1120650750361606600
-        assert parsed['ra'] == 181.71149
-        assert parsed['dec'] == -36.26852
-        assert parsed['latest_mag'] == 16.36
+        assert len(parsed) == 1
+        assert parsed[0]['atlas_id'] == 1120650750361606600
+        assert parsed[0]['ra'] == 181.71149
+        assert parsed[0]['dec'] == -36.26852
+        assert parsed[0]['latest_mag'] == 16.36
 
     def test_non_integer_id_leaves_atlas_id_none(self):
         message = {
@@ -115,29 +116,30 @@ class TestParseBotMessage:
             ]
         }
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['atlas_id'] is None
+        assert parsed[0]['atlas_id'] is None
 
     def test_missing_fields_all_none(self):
         parsed = slackbot.parse_bot_message({'blocks': []})
-        assert parsed == {
+        assert parsed == [{
             'telescope': None, 'related_list': None, 'status': None,
             'atlas_id': None, 'atlas_name': None, 'ra': None, 'dec': None, 'latest_mag': None,
             'note': None,
-        }
+        }]
 
     def test_real_sample_fixture(self):
         message = load_fixture('slack_sample_bot_message.json')
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['ra'] == 208.30919
-        assert parsed['dec'] == 0.44793
-        assert parsed['latest_mag'] == 16.72
-        assert parsed['atlas_id'] == 1135314261002652300
-        assert parsed['atlas_name'] == 'ATLAS26jij'
-        assert parsed['telescope'] == 'SALT'
-        assert parsed['related_list'] == '100Mpc Southern Transients'
-        assert parsed['status'] == 'Triggered'
+        assert len(parsed) == 1
+        assert parsed[0]['ra'] == 208.30919
+        assert parsed[0]['dec'] == 0.44793
+        assert parsed[0]['latest_mag'] == 16.72
+        assert parsed[0]['atlas_id'] == 1135314261002652300
+        assert parsed[0]['atlas_name'] == 'ATLAS26jij'
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['related_list'] == '100Mpc Southern Transients'
+        assert parsed[0]['status'] == 'Triggered'
         # Fixture has '*Notes*\nNone' - literal 'None' text normalizes to a real None
-        assert parsed['note'] is None
+        assert parsed[0]['note'] is None
 
     def test_notes_field_with_real_content_is_kept(self):
         message = {'blocks': [
@@ -146,76 +148,116 @@ class TestParseBotMessage:
             ]}
         ]}
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['note'] == 'Re-triggered after fibre issue'
+        assert parsed[0]['note'] == 'Re-triggered after fibre issue'
+
+    def test_two_targets_in_one_message_are_both_parsed(self):
+        # Claude wrote this for issue #37 (2026-08-14), fixture is a real captured
+        # message where the bug lost the first of two SALT trigger targets.
+        message = load_fixture('slack_sample_bot_multi_target_message.json')
+        parsed = slackbot.parse_bot_message(message)
+        assert len(parsed) == 2
+        assert parsed[0]['atlas_id'] == 1022628271010936300
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[1]['atlas_id'] == 1020547660051719200
+        assert parsed[1]['telescope'] == 'SALT'
+        assert parsed[1]['status'] == 'Triggered'
 
 
 class TestParseHumanMessage:
     def test_no_report_tag_is_ignored(self):
         text = 'SALT TRIGGER\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['telescope'] is None
-        assert parsed['status'] is None
-        assert parsed['atlas_id'] is None
+        assert len(parsed) == 1
+        assert parsed[0]['telescope'] is None
+        assert parsed[0]['status'] is None
+        assert parsed[0]['atlas_id'] is None
 
     def test_casual_chat_mentioning_trigger_is_ignored(self):
         text = 'did you catch the salt trigger yesterday? ATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['atlas_id'] is None
+        assert len(parsed) == 1
+        assert parsed[0]['atlas_id'] is None
 
     def test_report_salt_trigger(self):
         text = 'REPORT\nSALT TRIGGER\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['telescope'] == 'SALT'
-        assert parsed['status'] == 'Triggered'
-        assert parsed['atlas_id'] == 1135314261002652300
-        assert parsed['note'] is None
+        assert len(parsed) == 1
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[0]['atlas_id'] == 1135314261002652300
+        assert parsed[0]['note'] is None
 
     def test_report_salt_observed_with_notes(self):
         text = ('REPORT\nSALT OBSERVED\nATLAS ID: 1135314261002652300\n'
                  'Notes: seeing was poor, may need a re-do')
         parsed = slackbot.parse_human_message(text)
-        assert parsed['status'] == 'Observed'
-        assert parsed['note'] == 'seeing was poor, may need a re-do'
+        assert parsed[0]['status'] == 'Observed'
+        assert parsed[0]['note'] == 'seeing was poor, may need a re-do'
 
     def test_report_fail_status(self):
         text = 'REPORT\nSALT FAILED\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['status'] == 'Failed'
+        assert parsed[0]['status'] == 'Failed'
 
     def test_report_mookodi(self):
         text = 'REPORT\nMOOKODI TRIGGER\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['telescope'] == 'Mookodi'
+        assert parsed[0]['telescope'] == 'Mookodi'
 
     def test_report_lesedi_synonym_for_mookodi(self):
         text = 'REPORT\nLESEDI TRIGGER\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['telescope'] == 'Mookodi'
+        assert parsed[0]['telescope'] == 'Mookodi'
 
     def test_report_missing_status_keyword_is_ignored(self):
         text = 'REPORT\nSALT ATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['status'] is None
-        assert parsed['telescope'] is None
+        assert parsed[0]['status'] is None
+        assert parsed[0]['telescope'] is None
 
     def test_report_missing_telescope_keyword_is_ignored(self):
         text = 'REPORT\nTRIGGERED\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
-        assert parsed['status'] == 'Triggered'
-        assert parsed['telescope'] is None
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[0]['telescope'] is None
 
     def test_report_short_atlas_id_leaves_atlas_id_none(self, caplog):
         text = 'REPORT\nSALT TRIGGER\nATLAS ID: 113531426100265230'
         with caplog.at_level('ERROR'):
             parsed = slackbot.parse_human_message(text)
-        assert parsed['atlas_id'] is None
+        assert parsed[0]['atlas_id'] is None
         assert 'not valid ATLAS ID found' in caplog.text
 
     def test_report_long_atlas_id_leaves_atlas_id_none(self, caplog):
         text = 'REPORT\nSALT TRIGGER\nATLAS ID: 11353142610026523001'
         with caplog.at_level('ERROR'):
             parsed = slackbot.parse_human_message(text)
-        assert parsed['atlas_id'] is None
+        assert parsed[0]['atlas_id'] is None
+
+    def test_two_reports_in_one_message_are_both_parsed(self):
+        text = ('REPORT\nSALT TRIGGER\nATLAS ID: 1022628271010936300\n\n'
+                 'REPORT\nSALT TRIGGER\nATLAS ID: 1020547660051719200')
+        parsed = slackbot.parse_human_message(text)
+        assert len(parsed) == 2
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[0]['atlas_id'] == 1022628271010936300
+        assert parsed[1]['telescope'] == 'SALT'
+        assert parsed[1]['status'] == 'Triggered'
+        assert parsed[1]['atlas_id'] == 1020547660051719200
+
+    def test_two_reports_different_telescopes_and_status(self):
+        text = ('REPORT\nSALT TRIGGER\nATLAS ID: 1022628271010936300\n\n'
+                 'REPORT\nMOOKODI OBSERVED\nATLAS ID: 1020547660051719200\n'
+                 'Notes: clean detection')
+        parsed = slackbot.parse_human_message(text)
+        assert len(parsed) == 2
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[1]['telescope'] == 'Mookodi'
+        assert parsed[1]['status'] == 'Observed'
+        assert parsed[1]['note'] == 'clean detection'
 
 
 class TestFindCsvFile:
@@ -310,19 +352,27 @@ class TestProcessMessage:
         monkeypatch.setattr(db, 'get_connection', lambda path=None: sqlite3.connect(db_path))
         return db_path
 
-    def test_bot_message_without_profile_is_skipped(self, monkeypatch, tmp_path):
+    def test_bot_message_without_profile_is_logged_with_null_status(self, monkeypatch, tmp_path):
+        # Claude wrote this for issue #38 (2026-08-14): skipped messages must
+        # still get a row, otherwise the polling cursor (MAX(slack_ts)) never
+        # advances past them and the bot re-fetches them forever.
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
 
         client = MagicMock()
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
         message = {'bot_id': 'B123', 'user': 'U0BM9M40WN8', 'ts': '1690833945.001900', 'upload': True}
 
         slackbot.process_message(message, client, {})
 
         conn = sqlite3.connect(db_path)
-        count = conn.execute('SELECT COUNT(*) FROM slack_messages').fetchone()[0]
+        row = conn.execute(
+            'SELECT slack_ts, status, note FROM slack_messages'
+        ).fetchone()
         conn.close()
-        assert count == 0
+        assert row[0] == '1690833945.001900'
+        assert row[1] is None
+        assert row[2] is not None and 'image upload' in row[2]
         client.users_info.assert_not_called()
 
     def test_bot_message_logs_parsed_fields(self, monkeypatch, tmp_path):
@@ -353,6 +403,27 @@ class TestProcessMessage:
         conn.close()
         assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered')
 
+    def test_bot_message_with_two_targets_logs_two_rows(self, monkeypatch, tmp_path):
+        # Claude wrote this for issue #37 (2026-08-14), real captured message
+        # where "2 new target(s)" used to collapse into a single db row.
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = load_fixture('slack_sample_bot_multi_target_message.json')
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute(
+            'SELECT atlas_id, telescope, status FROM slack_messages ORDER BY atlas_id'
+        ).fetchall()
+        conn.close()
+        assert rows == [
+            (1020547660051719200, 'SALT', 'Triggered'),
+            (1022628271010936300, 'SALT', 'Triggered'),
+        ]
+
     def test_human_message_logs_sender_only(self, monkeypatch, tmp_path):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
@@ -369,6 +440,33 @@ class TestProcessMessage:
         ).fetchone()
         conn.close()
         assert row == ('Simon de Wet', None, None)
+
+    def test_human_message_with_two_reports_logs_two_rows(self, monkeypatch, tmp_path):
+        # Claude wrote this for issue #37 (2026-08-14): a single Slack message
+        # batching two REPORT blocks must produce two rows, not one.
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        client.users_info.return_value = {'user': {'real_name': 'Simon de Wet'}}
+        message = {
+            'user': 'U456',
+            'ts': '1690833945.001900',
+            'text': ('REPORT\nSALT TRIGGER\nATLAS ID: 1022628271010936300\n\n'
+                      'REPORT\nSALT TRIGGER\nATLAS ID: 1020547660051719200'),
+        }
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute(
+            'SELECT slack_ts, atlas_id, status FROM slack_messages ORDER BY atlas_id'
+        ).fetchall()
+        conn.close()
+        assert rows == [
+            ('1690833945.001900', 1020547660051719200, 'Triggered'),
+            ('1690833945.001900', 1022628271010936300, 'Triggered'),
+        ]
 
     def test_csv_message_parses_atlas_id_from_text_and_downloads(self, monkeypatch, tmp_path):
         import sqlite3
@@ -408,3 +506,56 @@ class TestProcessMessage:
             'https://files.slack.com/files-pri/THTTNC3S8-F0BNS8WEAGH/download/atlas26jij_1_mkd_20260806.0104.csv',
             headers={'Authorization': 'Bearer xoxb-fake-token'},
         )
+
+    def test_csv_download_success_is_logged(self, monkeypatch, tmp_path, caplog):
+        # Claude wrote this for the logging review (2026-08-14): H couldn't tell
+        # from the logs alone whether a CSV download had actually succeeded.
+        db_path = self._make_db(monkeypatch, tmp_path)
+        spectra_dir = tmp_path / 'spectra'
+        monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
+
+        message = load_fixture('slack_sample_csv_message.json')
+        client = MagicMock()
+        client.token = 'xoxb-fake-token'
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
+        mock_response = MagicMock()
+        mock_response.content = b'wavelength_angs,flux\n4000,1.0\n'
+        monkeypatch.setattr(slackbot.requests, 'get', MagicMock(return_value=mock_response))
+
+        with caplog.at_level('INFO'):
+            slackbot.process_message(message, client, {})
+
+        assert 'Saved spectrum CSV' in caplog.text
+        assert 'ATLAS26jij_1_MKD_20260806.0104.csv' in caplog.text
+
+    def test_csv_download_failure_logs_error_row_instead_of_dropping_silently(self, monkeypatch, tmp_path, caplog):
+        # Claude wrote this for issue #39 (2026-08-14): a failed CSV download
+        # must still leave a row behind (status=None, error in note), both so
+        # the failure is visible in the db and so the polling cursor advances
+        # past this message instead of re-fetching it forever (see #38).
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+        spectra_dir = tmp_path / 'spectra'
+        monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
+
+        message = load_fixture('slack_sample_csv_message.json')
+        client = MagicMock()
+        client.token = 'xoxb-fake-token'
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
+        mock_get = MagicMock(side_effect=OSError('permission denied'))
+        monkeypatch.setattr(slackbot.requests, 'get', mock_get)
+
+        with caplog.at_level('ERROR'):
+            slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT status, note FROM slack_messages WHERE slack_ts = ?',
+            ('1786093308.000100',),
+        ).fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] is None
+        assert 'permission denied' in row[1]
+        assert 'Failed to process Slack message' in caplog.text

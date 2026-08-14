@@ -13,6 +13,16 @@ There are currently 3 lists of interest:
 
 # Dev References
 
+## Quick Note 2026-08-14 - DB migration for indexing in slack_messgaes table
+In order to correctly read ALL the reports from a message sent by Nic's bot, some of which contain
+several blocks, I needed to add a multi-index to `slack_messages`: UNIQUE(slack_ts, atlas_id).
+
+A pain to do in sqlite, i can create new index but can't drop the old index (just slack_ts), so the best thing to do at this early hour is to recreate the whole table:
+
+- [ ] `DROP TABLE slack_messages`;
+- [ ] `sqlite3 log.db < log.sql`
+- [ ] Manually run `slackbots.py`
+
 ## Slack Bot
 
 The slack bot that reads the #atlas_sao_bot messages uses the `el01z` credentials. It has been running in prod on db1 for a few days now (polling into `slack_messages`).

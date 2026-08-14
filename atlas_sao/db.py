@@ -3,6 +3,7 @@
 # to make functions parse a connection instead of all calling 
 # get_connection
 
+import logging
 import os
 import sqlite3
 
@@ -134,8 +135,12 @@ def log_slack_message(slack_ts: str,
     This needs a parser in order to extract the ra, dec, latest_mag etc
     which are contained within the text fields of the raw_message.
     """
+    # Claude wrote this for #38/#39 follow-up (2026-08-14): confirm what actually got
+    # written, without spamming the log for polling re-fetches. cursor.rowcount is 0
+    # when INSERT OR IGNORE hits the UNIQUE constraint (duplicate slack_ts+atlas_id),
+    # 1 when a row was genuinely added - only the latter is worth an INFO line.
     with get_connection(db_path) as conn:
-        conn.execute(
+        cursor = conn.execute(
             'INSERT OR IGNORE INTO slack_messages '
             '(slack_ts, sender_id, sender_name, telescope, related_list, '
             'atlas_id, atlas_name, ra, dec, latest_mag, status, note, message_time) '
@@ -143,6 +148,11 @@ def log_slack_message(slack_ts: str,
             (slack_ts, sender_id, sender_name, telescope, related_list,
              atlas_id, atlas_name, ra, dec, latest_mag, status, note, message_time)
         )
+        if cursor.rowcount:
+            logging.info(f"Logged slack message: ts={slack_ts} atlas_id={atlas_id} time={message_time}"
+                         f"status={status!r} note={note!r}")
+        else:
+            logging.debug(f"Duplicate slack message ignored: ts={slack_ts} atlas_id={atlas_id} time={message_time}")
 
     conn.close() # technically not needed because GC would do it, but adding anyways
 
