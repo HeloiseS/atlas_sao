@@ -110,7 +110,7 @@ def parse_blocks_fields(blocks: list) -> dict:
 
     Returns
     -------
-    Dictionary of 
+    Dictionary of our fields
     """
     fields = {}
 
@@ -145,7 +145,6 @@ def parse_blocks_fields(blocks: list) -> dict:
 
 
 def parse_telescope_from_text(text: str) -> str | None:
-    """# Claude wrote this for the Nic bot format change (2026-08-06)"""
     text_lower = text.lower()
     if 'salt' in text_lower:
         return 'SALT'
@@ -271,26 +270,33 @@ def parse_human_message(text: str) -> list[dict]:
 # ####   BOT TEXT MESSAGE  #### #
 # ############################# #
 
-def parse_bot_message(message: dict) -> dict:
-    """Parses a single message from a bot
-
-    Returns
-    -------
-    dictionary with keys:
-    - 'telescope','related_list','atlas_id','atlas_name','ra','dec','latest_mag','note'
-    """
-    fields = parse_blocks_fields(message.get('blocks', []))
-
-    parsed = {
-        'telescope': parse_telescope_from_text(message.get('text', '')),
-        'related_list': fields.get('Trigger source'),
-        'status': fields.get('Status'),
+def _empty_bot_report(telescope: str | None) -> dict:
+    return {
+        'telescope': telescope,
+        'related_list': None,
+        'status': None,
         'atlas_id': None,
-        'atlas_name': parse_object_name(message.get('blocks', [])),
+        'atlas_name': None,
         'ra': None,
         'dec': None,
         'latest_mag': None,
-        # Claude wrote this for the note column (2026-08-07) and HFS read and approved. 
+        'note': None,
+    }
+
+
+def _parse_bot_report_section(section: dict, telescope: str | None) -> dict:
+    fields = parse_blocks_fields([section])
+
+    parsed = {
+        'telescope': telescope,
+        'related_list': fields.get('Trigger source'),
+        'status': fields.get('Status'),
+        'atlas_id': None,
+        'atlas_name': parse_object_name([section]),
+        'ra': None,
+        'dec': None,
+        'latest_mag': None,
+        # Claude wrote this for the note column (2026-08-07) and HFS read and approved.
         # Nic's bot writes the literal text 'None' when there's nothing to say,
         # normalized to a real None/NULL here rather than stored as that string.
         'note': fields.get('Notes') if fields.get('Notes') not in (None, 'None') else None,
@@ -320,6 +326,31 @@ def parse_bot_message(message: dict) -> dict:
             logging.warning(f"Slack bot message 'Latest' field not parseable: {latest!r}")
 
     return parsed
+
+
+def parse_bot_message(message: dict) -> list[dict]:
+    """Parses a single message from a bot
+
+    Returns
+    -------
+    list of dictionaries, one per target/report section in the message, each with keys:
+    - 'telescope','related_list','atlas_id','atlas_name','ra','dec','latest_mag','note'
+    """
+    telescope = parse_telescope_from_text(message.get('text', ''))
+    # if several targets reported on there is one section PER TARGET. 
+    # If we don't look for multiple sections then we only record the last object
+    # mentioned in the message because it overwrites all the fields 
+    # Here we make a list of the fields for each section. 
+    sections = [
+        block for block in message.get('blocks', [])
+        if block.get('type') == 'section' and 'fields' in block
+    ]
+
+    if not sections:
+        return [_empty_bot_report(telescope)]
+
+    # Then we parse each section one by one
+    return [_parse_bot_report_section(section, telescope) for section in sections]
 
 
 # ############################# #
@@ -464,7 +495,7 @@ def process_message(message: dict,
         if csv_file is None and 'bot_id' in message and 'bot_profile' not in message:
             # Skip file uploads we don't care about storing (e.g. pictures)
             note = "Ignore: likely image upload"
-            logging.info(f"{note}, ts={message.get('ts')}")
+            logging.info(f"{note}, ts={message.get('ts')}, time={message_time}")
             db.log_slack_message(
                 slack_ts=message['ts'],
                 sender_id=sender_id,
@@ -480,11 +511,11 @@ def process_message(message: dict,
             process_csv_message(message, csv_file, sender_id, sender_name, client)
             return
 
-        # 3. Get the parsed report(s) of interest. Bot messages carry exactly
-        #    one report; human messages can batch more than one REPORT block
-        #    into a single message (#37), so parse_human_message returns a list.
+        # 3. Get the parsed report(s) of interest. Both bot and human messages
+        #    can batch more than one report into a single message (#37), so both
+        #    parse_bot_message and parse_human_message return a list.
         if 'bot_id' in message:
-            parsed_list = [parse_bot_message(message)]
+            parsed_list = parse_bot_message(message)
             # If it's a bot message we use a specific parser because the json looks different
             # case in point: there is no top level 'text' field to read like in the human
             # messages (see else statement)
@@ -511,7 +542,7 @@ def process_message(message: dict,
                 message_time=message_time,
             )
     except Exception as exc:
-        logging.exception(f"Failed to process Slack message ts={message.get('ts')}")
+        logging.exception(f"Failed to process Slack message ts={message.get('ts')}, time={message_time}")
         db.log_slack_message(
             slack_ts=message['ts'],
             sender_id=sender_id,

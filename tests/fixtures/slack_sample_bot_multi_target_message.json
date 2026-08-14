@@ -1,0 +1,191 @@
+{
+  "user": "U0BM9M40WN8",
+  "type": "message",
+  "ts": "1786602654.123679",
+  "bot_id": "B0BN0APFTC0",
+  "app_id": "A0BLZMTHG3V",
+  "text": "ATLAS Transient SALT requests: 2 new target(s)",
+  "team": "THTTNC3S8",
+  "bot_profile": {
+    "id": "B0BN0APFTC0",
+    "deleted": false,
+    "name": "Southern Triggers",
+    "updated": 1786005688,
+    "app_id": "A0BLZMTHG3V",
+    "user_id": "U0BM9M40WN8",
+    "icons": {
+      "image_36": "https://avatars.slack-edge.com/2026-08-06/11747392126503_5fc11c647b6faff80f88_36.png",
+      "image_48": "https://avatars.slack-edge.com/2026-08-06/11747392126503_5fc11c647b6faff80f88_48.png",
+      "image_72": "https://avatars.slack-edge.com/2026-08-06/11747392126503_5fc11c647b6faff80f88_72.png"
+    },
+    "team_id": "THTTNC3S8"
+  },
+  "blocks": [
+    {
+      "type": "header",
+      "block_id": "6x5gL",
+      "text": {
+        "type": "plain_text",
+        "text": ":telescope: ATLAS Transient SALT requests",
+        "emoji": true
+      }
+    },
+    {
+      "type": "context",
+      "block_id": "Wxvqb",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "*2* new target(s) visible at SALT in the next 24 h",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "divider",
+      "block_id": "pjLVj"
+    },
+    {
+      "type": "section",
+      "block_id": "uDwM0",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*id1022628271010936300*   \u00b7   NT   \u00b7   <https://star.pst.qub.ac.uk/sne/atlas4/candidate/1022628271010936300/|ATLAS candidate>",
+        "verbatim": false
+      },
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*ATLAS ID*\n1022628271010936300",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Status*\nTriggered",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*RA / Dec*\n36.61786, 1.16065",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Max track*\n137.3 min",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Disc. mag / date*\n18.43 \u00b7 2026-08-13 04:42:53 UT",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Latest*\n18.68 w \u00b7 2026-08-13 05:21:42 UT",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Trigger source*\n100Mpc Southern Transients",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Notes*\nNone",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Crossmatch*\nNA",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "context",
+      "block_id": "HZLYZ",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "*Visibility (UTC)*\n  \u2022 win 1: 2026-08-14 01:34 \u2192 2026-08-14 03:51 UTC (137 min)",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "divider",
+      "block_id": "C6dDK"
+    },
+    {
+      "type": "section",
+      "block_id": "dELJS",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*id1020547660051719200*   \u00b7   SN   \u00b7   <https://star.pst.qub.ac.uk/sne/atlas4/candidate/1020547660051719200/|ATLAS candidate>",
+        "verbatim": false
+      },
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*ATLAS ID*\n1020547660051719200",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Status*\nTriggered",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*RA / Dec*\n31.44859, -5.28870",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Max track*\n85.2 min",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Disc. mag / date*\n16.41 \u00b7 2026-08-13 04:01:31 UT",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Latest*\n16.40 w \u00b7 2026-08-13 04:42:14 UT",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Trigger source*\n100Mpc Southern Transients",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Notes*\nNone",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Crossmatch*\n<https://www.wis-tns.org/object/2026xrg|TNS>",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "context",
+      "block_id": "AxMhE",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "*Visibility (UTC)*\n  \u2022 win 1: 2026-08-14 00:46 \u2192 2026-08-14 02:11 UTC (85 min)",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "divider",
+      "block_id": "j2XXk"
+    }
+  ]
+}

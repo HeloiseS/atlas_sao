@@ -101,10 +101,11 @@ class TestParseBotMessage:
             ]
         }
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['atlas_id'] == 1120650750361606600
-        assert parsed['ra'] == 181.71149
-        assert parsed['dec'] == -36.26852
-        assert parsed['latest_mag'] == 16.36
+        assert len(parsed) == 1
+        assert parsed[0]['atlas_id'] == 1120650750361606600
+        assert parsed[0]['ra'] == 181.71149
+        assert parsed[0]['dec'] == -36.26852
+        assert parsed[0]['latest_mag'] == 16.36
 
     def test_non_integer_id_leaves_atlas_id_none(self):
         message = {
@@ -115,29 +116,30 @@ class TestParseBotMessage:
             ]
         }
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['atlas_id'] is None
+        assert parsed[0]['atlas_id'] is None
 
     def test_missing_fields_all_none(self):
         parsed = slackbot.parse_bot_message({'blocks': []})
-        assert parsed == {
+        assert parsed == [{
             'telescope': None, 'related_list': None, 'status': None,
             'atlas_id': None, 'atlas_name': None, 'ra': None, 'dec': None, 'latest_mag': None,
             'note': None,
-        }
+        }]
 
     def test_real_sample_fixture(self):
         message = load_fixture('slack_sample_bot_message.json')
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['ra'] == 208.30919
-        assert parsed['dec'] == 0.44793
-        assert parsed['latest_mag'] == 16.72
-        assert parsed['atlas_id'] == 1135314261002652300
-        assert parsed['atlas_name'] == 'ATLAS26jij'
-        assert parsed['telescope'] == 'SALT'
-        assert parsed['related_list'] == '100Mpc Southern Transients'
-        assert parsed['status'] == 'Triggered'
+        assert len(parsed) == 1
+        assert parsed[0]['ra'] == 208.30919
+        assert parsed[0]['dec'] == 0.44793
+        assert parsed[0]['latest_mag'] == 16.72
+        assert parsed[0]['atlas_id'] == 1135314261002652300
+        assert parsed[0]['atlas_name'] == 'ATLAS26jij'
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['related_list'] == '100Mpc Southern Transients'
+        assert parsed[0]['status'] == 'Triggered'
         # Fixture has '*Notes*\nNone' - literal 'None' text normalizes to a real None
-        assert parsed['note'] is None
+        assert parsed[0]['note'] is None
 
     def test_notes_field_with_real_content_is_kept(self):
         message = {'blocks': [
@@ -146,7 +148,20 @@ class TestParseBotMessage:
             ]}
         ]}
         parsed = slackbot.parse_bot_message(message)
-        assert parsed['note'] == 'Re-triggered after fibre issue'
+        assert parsed[0]['note'] == 'Re-triggered after fibre issue'
+
+    def test_two_targets_in_one_message_are_both_parsed(self):
+        # Claude wrote this for issue #37 (2026-08-14), fixture is a real captured
+        # message where the bug lost the first of two SALT trigger targets.
+        message = load_fixture('slack_sample_bot_multi_target_message.json')
+        parsed = slackbot.parse_bot_message(message)
+        assert len(parsed) == 2
+        assert parsed[0]['atlas_id'] == 1022628271010936300
+        assert parsed[0]['telescope'] == 'SALT'
+        assert parsed[0]['status'] == 'Triggered'
+        assert parsed[1]['atlas_id'] == 1020547660051719200
+        assert parsed[1]['telescope'] == 'SALT'
+        assert parsed[1]['status'] == 'Triggered'
 
 
 class TestParseHumanMessage:
@@ -357,7 +372,7 @@ class TestProcessMessage:
         conn.close()
         assert row[0] == '1690833945.001900'
         assert row[1] is None
-        assert row[2] is not None and 'file upload' in row[2]
+        assert row[2] is not None and 'image upload' in row[2]
         client.users_info.assert_not_called()
 
     def test_bot_message_logs_parsed_fields(self, monkeypatch, tmp_path):
@@ -387,6 +402,27 @@ class TestProcessMessage:
         ).fetchone()
         conn.close()
         assert row == ('ATLAS SALT Triggers', 'SALT', 'south_transients_100mpc', 1120650750361606600, 'Triggered')
+
+    def test_bot_message_with_two_targets_logs_two_rows(self, monkeypatch, tmp_path):
+        # Claude wrote this for issue #37 (2026-08-14), real captured message
+        # where "2 new target(s)" used to collapse into a single db row.
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+
+        client = MagicMock()
+        message = load_fixture('slack_sample_bot_multi_target_message.json')
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute(
+            'SELECT atlas_id, telescope, status FROM slack_messages ORDER BY atlas_id'
+        ).fetchall()
+        conn.close()
+        assert rows == [
+            (1020547660051719200, 'SALT', 'Triggered'),
+            (1022628271010936300, 'SALT', 'Triggered'),
+        ]
 
     def test_human_message_logs_sender_only(self, monkeypatch, tmp_path):
         import sqlite3

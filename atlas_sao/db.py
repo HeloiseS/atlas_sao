@@ -149,10 +149,10 @@ def log_slack_message(slack_ts: str,
              atlas_id, atlas_name, ra, dec, latest_mag, status, note, message_time)
         )
         if cursor.rowcount:
-            logging.info(f"Logged slack message: ts={slack_ts} atlas_id={atlas_id} "
+            logging.info(f"Logged slack message: ts={slack_ts} atlas_id={atlas_id} time={message_time}"
                          f"status={status!r} note={note!r}")
         else:
-            logging.debug(f"Duplicate slack message ignored: ts={slack_ts} atlas_id={atlas_id}")
+            logging.debug(f"Duplicate slack message ignored: ts={slack_ts} atlas_id={atlas_id} time={message_time}")
 
     conn.close() # technically not needed because GC would do it, but adding anyways
 
