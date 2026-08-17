@@ -195,6 +195,16 @@ class TestParseHumanMessage:
         assert parsed[0]['status'] == 'Observed'
         assert parsed[0]['note'] == 'seeing was poor, may need a re-do'
 
+    def test_report_status_keyword_typo_in_notes_is_ignored(self):
+        # Claude wrote this for issue #41 (2026-08-17): "trogger" in the
+        # Notes text used to be matched as "trigger" because keywords were
+        # searched across the whole block instead of stopping at "Notes:".
+        text = ('REPORT\nSALT OBSERVED\nATLAS ID: 1201510860524316900\n'
+                 'Notes: data obtained on second night after trogger.')
+        parsed = slackbot.parse_human_message(text)
+        assert parsed[0]['status'] == 'Observed'
+        assert parsed[0]['note'] == 'data obtained on second night after trogger.'
+
     def test_report_fail_status(self):
         text = 'REPORT\nSALT FAILED\nATLAS ID: 1135314261002652300'
         parsed = slackbot.parse_human_message(text)
