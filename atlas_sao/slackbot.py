@@ -194,9 +194,16 @@ def _empty_human_report() -> dict:
 def _parse_report_block(text: str) -> dict:
     parsed = _empty_human_report()
 
+    # We are splitting on "Notes:" so we ignore everything in
+    # Simon's notes. That is because we got one edge case on 2026-08-17
+    # where he explained that the object was finally triggered on second night
+    # and the OBSERVED report got upsert as Triggered for that reason
+    notes_split = re.split(r'Notes:', text, maxsplit=1, flags=re.IGNORECASE)
+    keyword_text = notes_split[0]
+
     # Just in case typos and we get a mixture of cases
 
-    text_lower = text.lower()
+    text_lower = keyword_text.lower()
     if 'fail' in text_lower:
         parsed['status'] = 'Failed'
     elif 'trigger' in text_lower:

@@ -13,15 +13,58 @@ There are currently 3 lists of interest:
 
 # Dev References
 
+## Useful queries
+
+### Which ATLAS ID candidate SALT Triggers
+
+```sql
+select atlas_id, message_time from slack_messages where telescope='SALT' AND sender_name = 'Southern Triggers' AND status='Triggered';
+```
+
+### How many unique alerts triggered on SALT by human
+
+```sql
+SELECT 
+    count(distinct(sm1.atlas_id)) 
+FROM slack_messages sm1
+JOIN (
+    SELECT atlas_id, sender_name, status, message_time
+    FROM slack_messages
+    WHERE status = 'Triggered' AND sender_name = 'Southern Triggers'
+) AS subquery1
+    ON sm1.atlas_id = subquery1.atlas_id
+WHERE sm1.status = 'Triggered' 
+    AND sm1.sender_name != 'Southern Triggers';
+```
+
+### Which alerts triggered on SALT by human 
+
+```sql
+SELECT 
+    sm1.atlas_id,
+    sm1.sender_name,
+    sm1.status,
+    sm1.message_time
+FROM slack_messages sm1
+JOIN (
+    SELECT atlas_id, sender_name, status, message_time
+    FROM slack_messages
+    WHERE status = 'Triggered' AND sender_name = 'Southern Triggers'
+) AS subquery1
+    ON sm1.atlas_id = subquery1.atlas_id
+WHERE sm1.status = 'Triggered' 
+    AND sm1.sender_name != 'Southern Triggers';
+```
+
 ## Quick Note 2026-08-14 - DB migration for indexing in slack_messgaes table
 In order to correctly read ALL the reports from a message sent by Nic's bot, some of which contain
 several blocks, I needed to add a multi-index to `slack_messages`: UNIQUE(slack_ts, atlas_id).
 
 A pain to do in sqlite, i can create new index but can't drop the old index (just slack_ts), so the best thing to do at this early hour is to recreate the whole table:
 
-- [ ] `DROP TABLE slack_messages`;
-- [ ] `sqlite3 log.db < log.sql`
-- [ ] Manually run `slackbots.py`
+- [x] `DROP TABLE slack_messages`;
+- [x] `sqlite3 log.db < log.sql`
+- [x] Manually run `slackbots.py`
 
 ## Slack Bot
 
