@@ -1,4 +1,4 @@
-CREATE TABLE xtgal_watchlist (
+CREATE TABLE IF NOT EXISTS xtgal_watchlist (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     atlas_id    INTEGER NOT NULL UNIQUE,
     active      INTEGER NOT NULL DEFAULT 1,
@@ -9,7 +9,7 @@ CREATE TABLE xtgal_watchlist (
     timestamp   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE bk_young_fast_track (
+CREATE TABLE IF NOT EXISTS bk_young_fast_track (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     atlas_id     INTEGER NOT NULL,
     date_added   TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE bk_young_fast_track (
     timestamp    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE bk_young_not_fast_track (
+CREATE TABLE IF NOT EXISTS bk_young_not_fast_track (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     atlas_id     INTEGER NOT NULL,
     date_added   TEXT,
@@ -29,7 +29,7 @@ CREATE TABLE bk_young_not_fast_track (
     timestamp    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE bk_peak (
+CREATE TABLE IF NOT EXISTS bk_peak (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     atlas_id     INTEGER NOT NULL,
     date_added   TEXT,
@@ -39,9 +39,9 @@ CREATE TABLE bk_peak (
     timestamp    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE slack_messages (
+CREATE TABLE IF NOT EXISTS slack_messages (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    slack_ts      TEXT NOT NULL UNIQUE,
+    slack_ts      TEXT NOT NULL,
     sender_id     TEXT NOT NULL,
     sender_name   TEXT NOT NULL,
     telescope     TEXT,
@@ -54,5 +54,15 @@ CREATE TABLE slack_messages (
     status        TEXT,
     note          TEXT,
     message_time  TEXT,
-    timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- HFS: slack timestamp can correspond to several atlas IDs when 
+    --      Nic reports several in a row. ATLAS ID also not unique
+    --      because a same ID will have status evolution. 
+    --      If atlas_id is NULL then one message with a unique slack_ts
+    --      can have DUPLICATE rows because every instance of NULL is unique
+    --      That is a weird edge case if 1) our cursor is in the wrong spot and
+    --      2) a message doesn't have an ATLAS ID after that wrong cursor location
+    --      No action taken to fix this as overly complicates indexes for a rare
+    --      edge case that may never occur. 
+    UNIQUE(slack_ts, atlas_id)
 );
