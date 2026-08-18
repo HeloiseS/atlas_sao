@@ -159,6 +159,36 @@ def log_slack_message(slack_ts: str,
 
 
 
+
+def get_unprocessed_observed_reports(db_path: str | None = None) -> list[dict]:
+    """Grab all the rows corresponding to a report of an Observation (Has status 'Observed')
+    that has not yet been process (list_removed_at is null)
+    """
+    with get_connection(db_path) as conn:
+        rows = conn.execute(
+            "SELECT id, atlas_id, telescope, related_list FROM slack_messages "
+            "WHERE status = 'Observed' AND atlas_id IS NOT NULL AND list_removed_at IS NULL"
+        ).fetchall()
+
+    conn.close()
+
+    return [
+        {'id': row[0], 'atlas_id': row[1], 'telescope': row[2], 'related_list': row[3]}
+        for row in rows
+    ]
+
+
+def mark_list_removed(row_id: int, db_path: str | None = None) -> None:
+    """sets a value for list_removed_at column for rows that have been processed"""
+    with get_connection(db_path) as conn:
+        conn.execute(
+            'UPDATE slack_messages SET list_removed_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (row_id,)
+        )
+
+    conn.close()
+
+
 def get_last_slack_ts(db_path: str | None = None) -> str:
     """Get the latest slack timemstamp from the slack_messages table. 
 

@@ -13,7 +13,13 @@ There are currently 3 lists of interest:
 
 # Dev References
 
+## TODO - 20260818
+
+1. Prod migration on db1 — same pattern as the xtgal_watchlist rename: ALTER TABLE slack_messages ADD COLUMN list_removed_at TEXT;
+2. Cron entry for bash_prod/observedListCleanup.sh on db1, after slackbot.sh in the schedule.
+
 ## Useful queries
+
 
 ### Which ATLAS ID candidate SALT Triggers
 
