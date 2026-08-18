@@ -192,6 +192,50 @@ class TestLogSlackMessage:
         assert 'Logged slack message' not in caplog.text
 
 
+class TestGetUnprocessedObservedReports:
+    def test_returns_empty_when_no_observed_reports(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              status='Triggered', atlas_id=1120650750361606600, db_path=db_path)
+        assert db.get_unprocessed_observed_reports(db_path=db_path) == []
+
+    def test_returns_observed_report(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              telescope='SALT', status='Observed',
+                              atlas_id=1120650750361606600, db_path=db_path)
+        reports = db.get_unprocessed_observed_reports(db_path=db_path)
+        assert reports == [{
+            'id': reports[0]['id'],
+            'atlas_id': 1120650750361606600,
+            'telescope': 'SALT',
+            'related_list': None,
+        }]
+
+    def test_excludes_null_atlas_id(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              status='Observed', db_path=db_path)
+        assert db.get_unprocessed_observed_reports(db_path=db_path) == []
+
+    def test_excludes_already_marked_removed(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              status='Observed', atlas_id=1120650750361606600, db_path=db_path)
+        reports = db.get_unprocessed_observed_reports(db_path=db_path)
+        db.mark_list_removed(reports[0]['id'], db_path=db_path)
+        assert db.get_unprocessed_observed_reports(db_path=db_path) == []
+
+
+class TestMarkListRemoved:
+    def test_sets_list_removed_at(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              status='Observed', atlas_id=1120650750361606600, db_path=db_path)
+        reports = db.get_unprocessed_observed_reports(db_path=db_path)
+        db.mark_list_removed(reports[0]['id'], db_path=db_path)
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute('SELECT list_removed_at FROM slack_messages WHERE id = ?', (reports[0]['id'],)).fetchone()
+        conn.close()
+        assert row[0] is not None
+
+
 class TestGetLastSlackTs:
     def test_returns_none_when_empty(self, db_path):
         assert db.get_last_slack_ts(db_path=db_path) is None
