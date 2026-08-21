@@ -13,11 +13,6 @@ There are currently 3 lists of interest:
 
 # Dev References
 
-## TODO - 20260818
-
-1. Prod migration on db1 — same pattern as the xtgal_watchlist rename: ALTER TABLE slack_messages ADD COLUMN list_removed_at TEXT;
-2. Cron entry for bash_prod/observedListCleanup.sh on db1, after slackbot.sh in the schedule.
-
 ## Useful queries
 
 
@@ -93,12 +88,11 @@ These are the "must-haves" atlas_sao's Slack ingestion (`atlas_sao/slackbot.py`)
     - `*Trigger source*` - free text, the custom list name that triggered this
     - `*Notes*` - free text, or the **literal string `None`** (not `N/A`, `-`, or blank) when there's nothing to say. We normalize exactly that string to a real empty value - anything else gets stored as literal text.
 
-**Spectrum CSV messages** (file-share, one per exposure):
-- Sent as a Slack file share with exactly one CSV file per message. If more than one CSV is ever attached to a single message, only the first is used (we log a warning, the rest are silently dropped) - so please keep it to one CSV per message.
-- The file's `filetype` must be `csv`.
-- The message's top-level `text` (not the file's `title`) must contain `ATLAS ID <id>` - this is what we parse to identify the object. Without it, the CSV is not downloaded and the message is logged with `atlas_id` NULL, on purpose (a missing ID here should be a loud, visible problem, not silently guessed at). e.g. `*ATLAS26jij*  ·  ATLAS ID 1135314261002652300  ·  Observed — quicklook products`.
+**Spectrum TXT messages** (file-share, one per exposure):
+- Sent as a Slack file share. Nic's messages currently attach both a `.txt` (`filetype` `text`) and a `.csv` (`filetype` `csv`) copy of the same spectrum, but only the txt file is looked at - the csv is not picked up at all (issue #44), so it's fine if it's missing or present. If more than one txt file is ever attached to a single message, only the first is used (we log a warning, the rest are silently dropped) - so please keep it to one txt per message.
+- The message's top-level `text` (not the file's `title`) must contain `ATLAS ID <id>` - this is what we parse to identify the object. Without it, the file is not downloaded and the message is logged with `atlas_id` NULL, on purpose (a missing ID here should be a loud, visible problem, not silently guessed at). e.g. `*ATLAS26jij*  ·  ATLAS ID 1135314261002652300  ·  Observed — quicklook products`.
 - If the text also has a bold `*<name>*` lead-in that's a real ATLAS name (not just `id<ATLAS ID>` echoed back), we store it too - but it's informational only, never required.
-- The file's `name` is saved as-is as the local filename - no format requirement on our end, but please keep it unique per exposure (current convention `<ATLAS name or id>_<exposure>_<frame id>.csv` works fine).
+- The file's `name` is saved as-is as the local filename - no format requirement on our end, but please keep it unique per exposure (current convention `<ATLAS name or id>_<exposure>_<frame id>.txt` works fine).
 - Companion PNG files (acquisition / spectrum image / spectrum plot) are currently ignored - not stored anywhere.
 
 #### Human messages (Simon, SALT and Mookodi)

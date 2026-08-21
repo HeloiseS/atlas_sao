@@ -361,27 +361,32 @@ def parse_bot_message(message: dict) -> list[dict]:
 
 
 # ############################# #
-# ## PARSE CSV SPECTRA FILES ## #  
+# ## PARSE TXT SPECTRA FILES ## #
 # ############################# #
 
-def find_csv_file(message: dict) -> dict | None:
+def find_spectrum_file(message: dict) -> dict | None:
     """
-    Gets the file sub-dictionary (under "files" list in the JSON) if it is a csv
+    Gets the file sub-dictionary (under "files" list in the JSON) if it is a PLAIN TEXT
 
     Note
     ----
-    If there are more than one csv in a message we only return the first one and 
-    log a warning so i can tell Nic there is a problem. 
+    If there are more than one plain text files in a message we only return the first one and
+    log a warning so i can tell Nic there is a problem.
     """
-    csv_files = [f for f in message.get('files', []) if f.get('filetype') == 'csv']
-    if len(csv_files) > 1:
-        logging.warning(f"Message has {len(csv_files)} csv files, only using the first: ts={message.get('ts')}")
-    return csv_files[0] if csv_files else None
+    # Save spectrum text files
+    text_files = [f for f in message.get('files', []) if f.get('filetype') == 'text']
+    if len(text_files) > 1:
+        logging.warning(f"Message has {len(text_files)} txt files, only using the first: ts={message.get('ts')}")
+    if text_files:
+        return text_files[0]
+
+    # We no longer save the csv files (2026-08-21)
+    return None
 
 
 
 
-def parse_csv_message_text(text: str) -> dict:
+def parse_spectrum_message_text(text: str) -> dict:
     """Extract the atlas id and atlas name from the messages that contain the
     spectra files. 
 
@@ -424,7 +429,7 @@ def parse_csv_message_text(text: str) -> dict:
 # ## PROCESSING ## #  
 # ################ #
 
-def download_csv_file(url: str, token: str, dest_path: str) -> None:
+def download_spectrum_file(url: str, token: str, dest_path: str) -> None:
     """Slack incantation to downlaod the files
     """
 
@@ -441,46 +446,49 @@ def download_csv_file(url: str, token: str, dest_path: str) -> None:
         # resp.content is the raw bytes which we can write straight to storage
         f.write(resp.content)
 
-    # Claude wrote this for the logging review (2026-08-14): confirm the save
-    # actually happened - this was the one silent success path in the CSV flow.
-    logging.info(f"Saved spectrum CSV -> {dest_path} ({len(resp.content)} bytes)")
+    # Confirm the save actually happened
+    logging.info(f"Saved spectrum file -> {dest_path} ({len(resp.content)} bytes)")
 
-def process_csv_message(message: dict,
-                        csv_file: dict,
+def process_spectrum_message(message: dict,
+                        spectrum_file: dict,
                         sender_id: str,
                         sender_name: str,
                         client) -> None:
-    """Processes the messages that contain csv files -> spectra. 
+    """Processes the messages that contain csv files -> spectra.
     """
     # Get the time of the messages
     message_time = message_time_from_ts(message['ts'])
-    # ATLAS ID in the text of the message. Sometimes it will also contain the name. 
+    # ATLAS ID in the text of the message. Sometimes it will also contain the name.
     # NOTE: Hopefully I can fix nick's code that the ATLAS name will be superfluous
-    parsed = parse_csv_message_text(message.get('text', ''))
+    parsed = parse_spectrum_message_text(message.get('text', ''))
     atlas_id = parsed['atlas_id']
     atlas_name = parsed['atlas_name']
 
-    csv_path = None
+    spectrum_path = None
 
     if atlas_id is None:
         # I made the decision that if the ATLAS ID is not there we don't download
         # I've said countless time the ATLAS ID is crucial, so we are not
-        # handling this gracefully. 
-        logging.warning(f"Could not parse ATLAS ID from csv message text, skipping download: ts={message.get('ts')} text={message.get('text', '')!r}")
+        # handling this gracefully.
+        logging.warning(f"Could not parse ATLAS ID from spectrum message text, skipping download: ts={message.get('ts')} text={message.get('text', '')!r}")
     else:
-        csv_path = os.path.join(SPECTRA_DIR, csv_file['name'])
-        download_csv_file(csv_file['url_private_download'], client.token, csv_path)
+        spectrum_path = os.path.join(SPECTRA_DIR, spectrum_file['name'])
+        download_spectrum_file(spectrum_file['url_private_download'], client.token, spectrum_path)
 
-    # Add a row to our slack messages with status Spectrum CSV
-    # Save the csv_path to the "Note" column 
+    # Status updated to say Spectrum TXT instead of CSV.
+    # If we didn't get the right file type, error is written (BUT NOT RAISED SO DON'T CRASH)
+    status = 'Spectrum TXT' if spectrum_file.get('filetype') == 'text' else 'File Type Err (not .txt)'
+
+    # Add a row to our slack messages with the spectrum status
+    # Save the spectrum_path to the "Note" column
     db.log_slack_message(
         slack_ts=message['ts'],
         sender_id=sender_id,
         sender_name=sender_name,
         atlas_id=atlas_id,
         atlas_name=atlas_name,
-        status='Spectrum CSV',
-        note=csv_path,
+        status=status,
+        note=spectrum_path,
         message_time=message_time,
     )
 
@@ -492,14 +500,14 @@ def process_message(message: dict,
 
     """
     message_time = message_time_from_ts(message['ts'])
-    # 0. Check if this is a csv message and save the file object (JSON dict with loads of fields)
-    csv_file = find_csv_file(message)
+    # 0. Check if this is a spectrum txt message and save the file object (JSON dict with loads of fields)
+    spectrum_file = find_spectrum_file(message)
 
     # 1. Who sent us the message and what's their name?
     sender_id, sender_name = resolve_sender(message, client, sender_cache)
 
     try:
-        if csv_file is None and 'bot_id' in message and 'bot_profile' not in message:
+        if spectrum_file is None and 'bot_id' in message and 'bot_profile' not in message:
             # Skip file uploads we don't care about storing (e.g. pictures)
             note = "Ignore: likely image upload"
             logging.info(f"{note}, ts={message.get('ts')}, time={message_time}")
@@ -512,10 +520,10 @@ def process_message(message: dict,
             )
             return
 
-        # 2. Spectrum CSV file-share messages get their own path - they don't
+        # 2. Spectrum TXT file-share messages get their own path - they don't
         #    look like the usual bot status update / human chat messages
-        if csv_file is not None:
-            process_csv_message(message, csv_file, sender_id, sender_name, client)
+        if spectrum_file is not None:
+            process_spectrum_message(message, spectrum_file, sender_id, sender_name, client)
             return
 
         # 3. Get the parsed report(s) of interest. Both bot and human messages
