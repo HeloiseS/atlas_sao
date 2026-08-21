@@ -270,47 +270,58 @@ class TestParseHumanMessage:
         assert parsed[1]['note'] == 'clean detection'
 
 
-class TestFindCsvFile:
-    def test_finds_csv_among_files(self):
-        message = {'files': [{'filetype': 'fits'}, {'filetype': 'csv', 'title': 'x'}]}
-        assert slackbot.find_csv_file(message) == {'filetype': 'csv', 'title': 'x'}
+class TestFindSpectrumFile:
+    def test_finds_txt_among_files(self):
+        message = {'files': [{'filetype': 'fits'}, {'filetype': 'text', 'title': 'x'}]}
+        assert slackbot.find_spectrum_file(message) == {'filetype': 'text', 'title': 'x'}
 
     def test_no_files_returns_none(self):
-        assert slackbot.find_csv_file({}) is None
+        assert slackbot.find_spectrum_file({}) is None
 
-    def test_no_csv_among_files_returns_none(self):
-        assert slackbot.find_csv_file({'files': [{'filetype': 'fits'}]}) is None
+    def test_no_spectrum_file_among_files_returns_none(self):
+        assert slackbot.find_spectrum_file({'files': [{'filetype': 'fits'}]}) is None
 
-    def test_multiple_csvs_returns_first_and_warns(self, caplog):
+    # Claude wrote this for issue #44 (2026-08-21): csv is no longer picked up
+    # at all - H decided not to keep it as a fallback, only txt is used now.
+    def test_csv_only_files_returns_none(self):
+        message = {'files': [{'filetype': 'csv', 'title': 'x'}]}
+        assert slackbot.find_spectrum_file(message) is None
+
+    def test_multiple_txts_returns_first_and_warns(self, caplog):
         message = {'ts': '123', 'files': [
-            {'filetype': 'csv', 'title': 'first'},
-            {'filetype': 'csv', 'title': 'second'},
+            {'filetype': 'text', 'title': 'first'},
+            {'filetype': 'text', 'title': 'second'},
         ]}
         with caplog.at_level('WARNING'):
-            csv_file = slackbot.find_csv_file(message)
-        assert csv_file == {'filetype': 'csv', 'title': 'first'}
+            spectrum_file = slackbot.find_spectrum_file(message)
+        assert spectrum_file == {'filetype': 'text', 'title': 'first'}
         assert 'only using the first' in caplog.text
 
-    def test_real_sample_fixture(self):
+    def test_real_csv_only_sample_fixture_returns_none(self):
         message = load_fixture('slack_sample_csv_message.json')
-        csv_file = slackbot.find_csv_file(message)
-        assert csv_file is not None
-        assert csv_file['title'] == 'ATLAS26jij (exposure 1/2) spectrum CSV'
+        assert slackbot.find_spectrum_file(message) is None
+
+    def test_real_txt_and_csv_sample_fixture_picks_txt(self):
+        message = load_fixture('slack_sample_txt_message.json')
+        spectrum_file = slackbot.find_spectrum_file(message)
+        assert spectrum_file is not None
+        assert spectrum_file['filetype'] == 'text'
+        assert spectrum_file['name'] == 'ATLAS26jwv_MKD_20260820.0113.txt'
 
 
-class TestParseCsvMessageText:
+class TestParseSpectrumMessageText:
     def test_parses_id_and_name(self):
         text = '*ATLAS26jij*  ·  ATLAS ID 1135314261002652300  ·  Observed — quicklook products'
-        result = slackbot.parse_csv_message_text(text)
+        result = slackbot.parse_spectrum_message_text(text)
         assert result == {'atlas_id': 1135314261002652300, 'atlas_name': 'ATLAS26jij'}
 
     def test_id_placeholder_name_is_not_kept_as_name(self):
         text = '*id1011551480543323800 (exposure 2/2)*  ·  ATLAS ID 1011551480543323800  ·  Observed — quicklook products'
-        result = slackbot.parse_csv_message_text(text)
+        result = slackbot.parse_spectrum_message_text(text)
         assert result == {'atlas_id': 1011551480543323800, 'atlas_name': None}
 
     def test_unrecognised_text_returns_all_none(self):
-        assert slackbot.parse_csv_message_text('some other message') == {'atlas_id': None, 'atlas_name': None}
+        assert slackbot.parse_spectrum_message_text('some other message') == {'atlas_id': None, 'atlas_name': None}
 
 
 class TestMessageTimeFromTs:
@@ -478,7 +489,10 @@ class TestProcessMessage:
             ('1690833945.001900', 1022628271010936300, 'Triggered'),
         ]
 
-    def test_csv_message_parses_atlas_id_from_text_and_downloads(self, monkeypatch, tmp_path):
+    # Claude wrote this for issue #44 (2026-08-21): csv is no longer treated
+    # as a spectrum file at all, so a csv-only message falls through to the
+    # same "ignore" path as any other file-less/picture bot upload.
+    def test_csv_only_message_is_ignored_not_downloaded(self, monkeypatch, tmp_path):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
         spectra_dir = tmp_path / 'spectra'
@@ -488,8 +502,39 @@ class TestProcessMessage:
         client = MagicMock()
         client.token = 'xoxb-fake-token'
         client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
+        mock_get = MagicMock()
+        monkeypatch.setattr(slackbot.requests, 'get', mock_get)
+
+        slackbot.process_message(message, client, {})
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            'SELECT sender_name, atlas_id, status, note FROM slack_messages '
+            "WHERE slack_ts = '1786093308.000100'"
+        ).fetchone()
+        conn.close()
+
+        assert row[0] == 'Southern Triggers'
+        assert row[1] is None
+        assert row[2] is None
+        assert row[3] == 'Ignore: likely image upload'
+        mock_get.assert_not_called()
+        assert not os.path.exists(spectra_dir)
+
+    # Claude wrote this for issue #44 (2026-08-21): real message fixture that
+    # carries both a txt and a csv - the txt must be the one downloaded/logged.
+    def test_txt_and_csv_message_prefers_txt_and_downloads(self, monkeypatch, tmp_path):
+        import sqlite3
+        db_path = self._make_db(monkeypatch, tmp_path)
+        spectra_dir = tmp_path / 'spectra'
+        monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
+
+        message = load_fixture('slack_sample_txt_message.json')
+        client = MagicMock()
+        client.token = 'xoxb-fake-token'
+        client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
         mock_response = MagicMock()
-        mock_response.content = b'wavelength_angs,flux\n4000,1.0\n'
+        mock_response.content = b'# wavelength_angstrom normalised_flux\n4090.14 0.729183\n'
         mock_get = MagicMock(return_value=mock_response)
         monkeypatch.setattr(slackbot.requests, 'get', mock_get)
 
@@ -498,57 +543,59 @@ class TestProcessMessage:
         conn = sqlite3.connect(db_path)
         row = conn.execute(
             'SELECT sender_name, atlas_id, atlas_name, status, note FROM slack_messages '
-            "WHERE slack_ts = '1786093308.000100'"
+            "WHERE slack_ts = '1787299228.105739'"
         ).fetchone()
         conn.close()
 
         assert row[0] == 'Southern Triggers'
-        assert row[1] == 1135314261002652300
-        assert row[2] == 'ATLAS26jij'
-        assert row[3] == 'Spectrum CSV'
-        csv_path = row[4]
-        assert csv_path == str(spectra_dir / 'ATLAS26jij_1_MKD_20260806.0104.csv')
-        assert os.path.exists(csv_path)
-        with open(csv_path, 'rb') as f:
-            assert f.read() == b'wavelength_angs,flux\n4000,1.0\n'
+        assert row[1] == 1020547660051719200
+        assert row[2] == 'ATLAS26jwv'
+        assert row[3] == 'Spectrum TXT'
+        txt_path = row[4]
+        assert txt_path == str(spectra_dir / 'ATLAS26jwv_MKD_20260820.0113.txt')
+        assert os.path.exists(txt_path)
 
         mock_get.assert_called_once_with(
-            'https://files.slack.com/files-pri/THTTNC3S8-F0BNS8WEAGH/download/atlas26jij_1_mkd_20260806.0104.csv',
+            'https://files.slack.com/files-pri/THTTNC3S8-F0BRU21LGJV/download/atlas26jwv_mkd_20260820.0113.txt',
             headers={'Authorization': 'Bearer xoxb-fake-token'},
         )
 
-    def test_csv_download_success_is_logged(self, monkeypatch, tmp_path, caplog):
-        # Claude wrote this for the logging review (2026-08-14): H couldn't tell
-        # from the logs alone whether a CSV download had actually succeeded.
+    # Claude wrote this for the logging review (2026-08-14): H couldn't tell
+    # from the logs alone whether a spectrum download had actually succeeded.
+    # Claude switched this to the txt fixture for issue #44 (2026-08-21) since
+    # csv is no longer downloaded at all.
+    def test_txt_download_success_is_logged(self, monkeypatch, tmp_path, caplog):
         db_path = self._make_db(monkeypatch, tmp_path)
         spectra_dir = tmp_path / 'spectra'
         monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
 
-        message = load_fixture('slack_sample_csv_message.json')
+        message = load_fixture('slack_sample_txt_message.json')
         client = MagicMock()
         client.token = 'xoxb-fake-token'
         client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
         mock_response = MagicMock()
-        mock_response.content = b'wavelength_angs,flux\n4000,1.0\n'
+        mock_response.content = b'# wavelength_angstrom normalised_flux\n4090.14 0.729183\n'
         monkeypatch.setattr(slackbot.requests, 'get', MagicMock(return_value=mock_response))
 
         with caplog.at_level('INFO'):
             slackbot.process_message(message, client, {})
 
-        assert 'Saved spectrum CSV' in caplog.text
-        assert 'ATLAS26jij_1_MKD_20260806.0104.csv' in caplog.text
+        assert 'Saved spectrum file' in caplog.text
+        assert 'ATLAS26jwv_MKD_20260820.0113.txt' in caplog.text
 
-    def test_csv_download_failure_logs_error_row_instead_of_dropping_silently(self, monkeypatch, tmp_path, caplog):
-        # Claude wrote this for issue #39 (2026-08-14): a failed CSV download
-        # must still leave a row behind (status=None, error in note), both so
-        # the failure is visible in the db and so the polling cursor advances
-        # past this message instead of re-fetching it forever (see #38).
+    # Claude wrote this for issue #39 (2026-08-14): a failed spectrum download
+    # must still leave a row behind (status=None, error in note), both so
+    # the failure is visible in the db and so the polling cursor advances
+    # past this message instead of re-fetching it forever (see #38).
+    # Claude switched this to the txt fixture for issue #44 (2026-08-21) since
+    # csv is no longer downloaded at all.
+    def test_txt_download_failure_logs_error_row_instead_of_dropping_silently(self, monkeypatch, tmp_path, caplog):
         import sqlite3
         db_path = self._make_db(monkeypatch, tmp_path)
         spectra_dir = tmp_path / 'spectra'
         monkeypatch.setattr(slackbot, 'SPECTRA_DIR', str(spectra_dir))
 
-        message = load_fixture('slack_sample_csv_message.json')
+        message = load_fixture('slack_sample_txt_message.json')
         client = MagicMock()
         client.token = 'xoxb-fake-token'
         client.bots_info.return_value = {'bot': {'name': 'Southern Triggers'}}
@@ -561,7 +608,7 @@ class TestProcessMessage:
         conn = sqlite3.connect(db_path)
         row = conn.execute(
             'SELECT status, note FROM slack_messages WHERE slack_ts = ?',
-            ('1786093308.000100',),
+            ('1787299228.105739',),
         ).fetchone()
         conn.close()
 
