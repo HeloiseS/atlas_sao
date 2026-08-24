@@ -7,7 +7,10 @@ Last Updated: 2026-08-05
 There are currently 3 lists of interest:
 - **Bright 100Mpc Southern Transients (Custom List 16)** | **Mookodi** : Young Transients within 100 Mpc that have not yet been classified, with VRA Score > 8.5, brighter than 17 mag
 - **100Mpc Southern Transients (Custom List 2)** | **SALT**: Young Transients that have not yet been classified, with VRA Score > 8.5, within 100 Mpc. No mag limit. _FED DIRECTLY FROM PSAT-SERVER INGEST SCRIPT_
-- **Southern Transients at Peak (Custom List 17)** | **Mookodi**: Transients "at peak". Current definition of "at peak" is: the last 3 lc points are all real detections brighter than 16.9 mag (allowing for their 1-sigma error bar). 
+- **Southern Transients at Peak (Custom List 17)** | **Mookodi**: Transients "at peak". Current definition of "at peak" is: the last 3 lc points are all real detections brighter than 16.9 mag (allowing for their 1-sigma error bar).
+
+
+**NOTE**: If object REBRIGHTENS, it won't enter the peak list a second time, as it's status in my table will have be set to ACTIVE = 0 
 
 ---
 
