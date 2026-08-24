@@ -183,14 +183,16 @@ def test_remove_targets_from_list_noop_when_empty(mock_remove):
     mock_remove.assert_not_called()
 
 
+@patch("atlas_sao.mookodiListWizard.db.get_removed_atlas_ids_for_list")
 @patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
 @patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
-def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_multi):
+def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_multi, mock_get_removed):
     live_mock = MagicMock()
     live_mock.response_data = []
     staging_mock = MagicMock()
     staging_mock.response_data = [{'transient_object_id': '1234567890123456789', 'object_group_id': 2}]
     mock_table.side_effect = [live_mock, staging_mock]
+    mock_get_removed.return_value = []
 
     source_mock = MagicMock()
     source_mock.response_data = [make_entry(last_mag=15.5, vra=9.2)]
@@ -200,3 +202,37 @@ def test_fill_up_returns_ids_and_vra_scores(mock_table, mock_multi):
 
     assert ids == ['1234567890123456789']
     assert vra_scores == {'1234567890123456789': 9.2}
+
+
+@patch("atlas_sao.mookodiListWizard.db.get_removed_atlas_ids_for_list")
+@patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
+def test_fill_up_excludes_previously_observed_and_removed_ids(mock_table, mock_multi, mock_get_removed):
+    live_mock = MagicMock()
+    live_mock.response_data = []
+    staging_mock = MagicMock()
+    staging_mock.response_data = [{'transient_object_id': '1234567890123456789', 'object_group_id': 2}]
+    mock_table.side_effect = [live_mock, staging_mock]
+    mock_get_removed.return_value = [1234567890123456789]
+
+    ids, vra_scores = mlw.fill_up()
+
+    mock_multi.assert_not_called()
+    assert ids == []
+    assert vra_scores == {}
+
+
+@patch("atlas_sao.mookodiListWizard.db.get_removed_atlas_ids_for_list")
+@patch("atlas_sao.mookodiListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.mookodiListWizard.ac.RequestCustomListsTable")
+def test_fill_up_queries_removed_ids_for_bright_100mpc_related_list(mock_table, mock_multi, mock_get_removed):
+    live_mock = MagicMock()
+    live_mock.response_data = []
+    staging_mock = MagicMock()
+    staging_mock.response_data = []
+    mock_table.side_effect = [live_mock, staging_mock]
+    mock_get_removed.return_value = []
+
+    mlw.fill_up(db_path='fake.db')
+
+    mock_get_removed.assert_called_once_with('Bright 100Mpc Southern Transients', db_path='fake.db')

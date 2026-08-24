@@ -99,6 +99,20 @@ def deactivate_old_alerts(cutoff_date: str, db_path: str | None = None) -> None:
     conn.close() # technically not needed because GC would do it, but adding anyways
 
 
+def deactivate_xtgal_ids(atlas_ids: list, db_path: str | None = None) -> None:
+    """Sets active = 0 in xtgal_watchlist for the given ATLAS_IDs"""
+    if not atlas_ids:
+        return
+
+    with get_connection(db_path) as conn:
+        conn.executemany(
+            'UPDATE xtgal_watchlist SET active = 0 WHERE atlas_id = ?',
+            [(int(aid),) for aid in atlas_ids]
+        )
+
+    conn.close() 
+
+
 def get_active_xtgal_ids(db_path: str | None = None) -> list:
     """Utility function to know which alerts are set to active
     
@@ -187,6 +201,26 @@ def mark_list_removed(row_id: int, db_path: str | None = None) -> None:
         )
 
     conn.close()
+
+
+def get_removed_atlas_ids_for_list(related_list: str, db_path: str | None = None) -> list:
+    """ATLAS_IDs previously Observed and removed from the given related_list
+    
+    Note
+    -----
+    This means that if we want to trigger AGAIN, I'll have to manually change list_removed_at
+    or find some other way to do this book keeping (maybe an "Update" in the notes? TBD may not be needed)
+    """
+    with get_connection(db_path) as conn:
+        rows = conn.execute(
+            'SELECT DISTINCT atlas_id FROM slack_messages '
+            'WHERE related_list = ? AND list_removed_at IS NOT NULL',
+            (related_list,)
+        ).fetchall()
+
+    conn.close()
+
+    return [row[0] for row in rows]
 
 
 def get_last_slack_ts(db_path: str | None = None) -> str:
