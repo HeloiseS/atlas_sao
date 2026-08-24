@@ -144,9 +144,34 @@ def clean_up(objectgroupid: int,
         raise
 
 
-def fill_up(mag_threshold=MAG_THRESHOLD):
+def fill_up(mag_threshold=MAG_THRESHOLD, 
+            db_path=None):
+    """
+    Fills up the Bright 100 Mpc Transient list
+
+    Note
+    ----
+    This version of the fill_up function checks wether an alert has already been removed
+    from this list in the path (checks list_removed_at not NULL in slack_messages).
+
+    This will prevent an object from RE-ENTERNG THE QUEUE unless I alter the db.
+
+    If These manual re-observation because routine I will need to find a more nuanced
+    logic so I don't have to alter the column in the db.
+
+    Parameters
+    -----------
+    mag_threshold: float
+       The Mangtidue threshold for what is "Bright" default is 17
+
+    db_path: str
+       Path to the log.db 
+    """
+
     try:
+        # 1. Check what's already in the list
         logging.info("Fetching current mookodi_live list to check existing members...")
+        ## Note: This is called "live" because historically the list was called Mookodi Live
         live = ac.RequestCustomListsTable({'objectgroupid': 16}, get_response=True)
         if live.response_data:
             live_df = pd.DataFrame(live.response_data).drop('object_group_id', axis=1)
@@ -155,6 +180,15 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
             live_ids_set = set()
         logging.info(f"{len(live_ids_set)} objects currently in mookodi_live.")
 
+        # 2. Check what objects have already been observed
+        logging.info("Fetching IDs previously Observed & removed from Bright 100Mpc list...")
+        ## This just looks for any row in slack_messages where related_list = this one and list_removed_at is NOT NULL
+        removed_ids_set = set(str(id_) for id_ in db.get_removed_atlas_ids_for_list(
+            'Bright 100Mpc Southern Transients', db_path=db_path))
+        logging.info(f"{len(removed_ids_set)} objects previously observed & removed - excluded from re-add.")
+
+        # 3. Check our input to see if there are candidates to be added to the list
+        #    That is the Southern 100Mpc Transients but historically was refered to as the Staging list
         logging.info("Fetching Mookodi staging list (objectgroupid=2)...")
         staging = ac.RequestCustomListsTable({'objectgroupid': 2}, get_response=True)
 
@@ -163,11 +197,12 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
             return [], {}
 
         staging_df = pd.DataFrame(staging.response_data).drop('object_group_id', axis=1)
-        staging_ids = staging_df.transient_object_id.values.astype(str)
-        logging.info(f"Fetched {len(staging_ids)} entries from staging list.")
+        staging_ids_set = set(staging_df.transient_object_id.values.astype(str))
+        logging.info(f"Fetched {len(staging_ids_set)} entries from staging list.")
 
-        candidate_ids = np.array([id_ for id_ in staging_ids if id_ not in live_ids_set])
-        logging.info(f"{len(candidate_ids)} staging objects not already in mookodi_live.")
+        # Finding set of valid candidate ids by removing already live IDs and those already removed
+        candidate_ids =  staging_ids_set - removed_ids_set - live_ids_set
+        logging.info(f"{len(candidate_ids)} staging objects not already in mookodi_live or previously removed.")
 
         if len(candidate_ids) == 0:
             logging.info("No new candidates to evaluate.")
@@ -176,8 +211,8 @@ def fill_up(mag_threshold=MAG_THRESHOLD):
         try:
             logging.info("Requesting source data for staging candidates...")
             multi_data = ac.RequestMultipleSourceData(
-                array_ids=candidate_ids,
-                mjdthreshold=60_500,
+                array_ids=np.array(list(candidate_ids)),
+                mjdthreshold=61_000, # TODO: make dynamic!!
                 chunk_size=25
             )
             multi_data.chunk_get_response_quiet()

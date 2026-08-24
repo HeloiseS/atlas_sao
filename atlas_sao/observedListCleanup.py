@@ -119,6 +119,12 @@ def process_observed_reports(db_path=None):
 
         ## 3.2 Update our book keeping table so it's in sync with web server list
 
+        ### 3.2.1 If it's the Peak List we also need to update the ACTIVE flag in xtgal_watchlist
+        ###       which is the input source of the Peak list. (Otherwise we'll get alerts coming BACK)
+        if list_name == 'south_transients_peak':
+            db.deactivate_xtgal_ids(unique_ids, db_path=db_path)
+
+        ### 3.2.2 For all lists we update the relevant book keeping table
         bk_table = LIST_NAME_TO_BK_TABLE.get(list_name)
 
         if bk_table:

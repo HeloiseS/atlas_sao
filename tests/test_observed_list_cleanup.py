@@ -81,11 +81,12 @@ def test_process_observed_reports_skips_unresolved_list(mock_get, mock_remove, m
     mock_mark.assert_not_called()
 
 
+@patch("atlas_sao.observedListCleanup.db.deactivate_xtgal_ids")
 @patch("atlas_sao.observedListCleanup.db.mark_list_removed")
 @patch("atlas_sao.observedListCleanup.db.log_removed")
 @patch("atlas_sao.observedListCleanup.ac.RemoveFromCustomList")
 @patch("atlas_sao.observedListCleanup.db.get_unprocessed_observed_reports")
-def test_process_observed_reports_dedupes_atlas_ids_within_a_list(mock_get, mock_remove, mock_log_removed, mock_mark):
+def test_process_observed_reports_dedupes_atlas_ids_within_a_list(mock_get, mock_remove, mock_log_removed, mock_mark, mock_deactivate):
     mock_get.return_value = [
         {'id': 1, 'atlas_id': 1111111111111111111, 'telescope': 'Mookodi', 'related_list': 'Southern Transients at Peak'},
         {'id': 2, 'atlas_id': 1111111111111111111, 'telescope': 'Mookodi', 'related_list': 'Southern Transients at Peak'},
@@ -100,6 +101,38 @@ def test_process_observed_reports_dedupes_atlas_ids_within_a_list(mock_get, mock
 
     mock_log_removed.assert_called_once_with([1111111111111111111], 'bk_peak', db_path='fake.db')
     assert mock_mark.call_count == 2
+
+
+@patch("atlas_sao.observedListCleanup.db.deactivate_xtgal_ids")
+@patch("atlas_sao.observedListCleanup.db.mark_list_removed")
+@patch("atlas_sao.observedListCleanup.db.log_removed")
+@patch("atlas_sao.observedListCleanup.ac.RemoveFromCustomList")
+@patch("atlas_sao.observedListCleanup.db.get_unprocessed_observed_reports")
+def test_process_observed_reports_deactivates_xtgal_watchlist_for_peak_list(mock_get, mock_remove, mock_log_removed, mock_mark, mock_deactivate):
+    mock_get.return_value = [
+        {'id': 1, 'atlas_id': 1111111111111111111, 'telescope': 'Mookodi',
+         'related_list': 'Southern Transients at Peak'},
+    ]
+
+    olc.process_observed_reports(db_path='fake.db')
+
+    mock_deactivate.assert_called_once_with([1111111111111111111], db_path='fake.db')
+
+
+@patch("atlas_sao.observedListCleanup.db.deactivate_xtgal_ids")
+@patch("atlas_sao.observedListCleanup.db.mark_list_removed")
+@patch("atlas_sao.observedListCleanup.db.log_removed")
+@patch("atlas_sao.observedListCleanup.ac.RemoveFromCustomList")
+@patch("atlas_sao.observedListCleanup.db.get_unprocessed_observed_reports")
+def test_process_observed_reports_does_not_deactivate_xtgal_for_non_peak_list(mock_get, mock_remove, mock_log_removed, mock_mark, mock_deactivate):
+    mock_get.return_value = [
+        {'id': 1, 'atlas_id': 1111111111111111111, 'telescope': 'Mookodi',
+         'related_list': 'Bright 100Mpc Southern Transients'},
+    ]
+
+    olc.process_observed_reports(db_path='fake.db')
+
+    mock_deactivate.assert_not_called()
 
 
 @patch("atlas_sao.observedListCleanup.db.mark_list_removed")

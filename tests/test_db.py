@@ -128,6 +128,76 @@ class TestDeactivateBefore:
         assert active == 1
 
 
+class TestDeactivateXtgalIds:
+    def test_noop_when_empty(self, db_path):
+        conn = sqlite3.connect(db_path)
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (1111111111111111111, 1)")
+        conn.commit()
+        conn.close()
+        db.deactivate_xtgal_ids([], db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        active = conn.execute('SELECT active FROM xtgal_watchlist').fetchone()[0]
+        conn.close()
+        assert active == 1
+
+    def test_deactivates_given_ids(self, db_path):
+        conn = sqlite3.connect(db_path)
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (1111111111111111111, 1)")
+        conn.commit()
+        conn.close()
+        db.deactivate_xtgal_ids(['1111111111111111111'], db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        active = conn.execute('SELECT active FROM xtgal_watchlist').fetchone()[0]
+        conn.close()
+        assert active == 0
+
+    def test_leaves_other_ids_active(self, db_path):
+        conn = sqlite3.connect(db_path)
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (1111111111111111111, 1)")
+        conn.execute("INSERT INTO xtgal_watchlist (atlas_id, active) VALUES (2222222222222222222, 1)")
+        conn.commit()
+        conn.close()
+        db.deactivate_xtgal_ids(['1111111111111111111'], db_path=db_path)
+        conn = sqlite3.connect(db_path)
+        rows = dict(conn.execute('SELECT atlas_id, active FROM xtgal_watchlist').fetchall())
+        conn.close()
+        assert rows[1111111111111111111] == 0
+        assert rows[2222222222222222222] == 1
+
+
+class TestGetRemovedAtlasIdsForList:
+    def test_returns_empty_when_no_matching_rows(self, db_path):
+        assert db.get_removed_atlas_ids_for_list('Bright 100Mpc Southern Transients', db_path=db_path) == []
+
+    def test_returns_ids_observed_and_removed_for_that_list(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              related_list='Bright 100Mpc Southern Transients', status='Observed',
+                              atlas_id=1111111111111111111, db_path=db_path)
+        reports = db.get_unprocessed_observed_reports(db_path=db_path)
+        db.mark_list_removed(reports[0]['id'], db_path=db_path)
+
+        ids = db.get_removed_atlas_ids_for_list('Bright 100Mpc Southern Transients', db_path=db_path)
+        assert ids == [1111111111111111111]
+
+    def test_excludes_rows_not_yet_removed(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              related_list='Bright 100Mpc Southern Transients', status='Observed',
+                              atlas_id=1111111111111111111, db_path=db_path)
+
+        ids = db.get_removed_atlas_ids_for_list('Bright 100Mpc Southern Transients', db_path=db_path)
+        assert ids == []
+
+    def test_excludes_other_lists(self, db_path):
+        db.log_slack_message('1690833945.001900', 'B123', 'ATLAS SALT Triggers',
+                              related_list='Southern Transients at Peak', status='Observed',
+                              atlas_id=1111111111111111111, db_path=db_path)
+        reports = db.get_unprocessed_observed_reports(db_path=db_path)
+        db.mark_list_removed(reports[0]['id'], db_path=db_path)
+
+        ids = db.get_removed_atlas_ids_for_list('Bright 100Mpc Southern Transients', db_path=db_path)
+        assert ids == []
+
+
 class TestGetActiveXtgalIds:
     def test_returns_empty_when_no_entries(self, db_path):
         assert db.get_active_xtgal_ids(db_path=db_path) == []
