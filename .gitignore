@@ -2,6 +2,9 @@ CLAUDE.md
 # SQLite database file
 *.db
 
+# repo tns examples 
+*tns_examples
+
 # flock lockfiles created at runtime by bash_prod/*.sh
 bash_prod/.locks/
 
@@ -103,6 +106,8 @@ api_config_dev.yaml
 api_config_staging.yaml
 api_config_prod.yaml
 slack_config_MINE.yaml
+tns_config_MINE.yaml
+scripts/reports/
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is

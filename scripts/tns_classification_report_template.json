@@ -1,0 +1,50 @@
+{
+  "classification_report": {
+    "0": {
+      "name": "",
+      "classifier": "S. de Wet and H. F. Stevance on behalf of ATLAS and SAAO IO",
+      "objtypeid": "",
+      "redshift": "",
+      "groupid": "111",
+      "end_prop_period": "",
+      "prop_period_groups": [],
+      "remarks": "",
+      "spectra": {
+        "0": {
+          "obsdate": "",
+          "instrumentid": "279",
+          "exptime": "",
+          "observer": "",
+          "reducer": "",
+          "spectypeid": "",
+          "ascii_file": "",
+          "fits_file": "",
+          "remarks": "",
+          "end_prop_period": ""
+        },
+        "1": {
+          "obsdate": "",
+          "instrumentid": "",
+          "exptime": "",
+          "observer": "",
+          "reducer": "",
+          "spectypeid": "",
+          "ascii_file": "",
+          "fits_file": "",
+          "remarks": "",
+          "end_prop_period": ""
+        }
+      },
+      "related_files": {
+        "0": {
+          "related_file_name": "",
+          "related_file_comments": ""
+        },
+        "1": {
+          "related_file_name": "",
+          "related_file_comments": ""
+        }
+      }
+    }
+  }
+}
