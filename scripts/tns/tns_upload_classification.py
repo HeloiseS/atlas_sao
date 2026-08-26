@@ -300,7 +300,7 @@ def run_dialogue():
     # ############### #
     extra_remarks = _prompt("Additional Remarks", "None")
     if extra_remarks and extra_remarks != "None":
-        entry['remarks'] = f"{default_remark} {extra_remarks}"
+        entry['remarks'] = f"{extra_remarks}+ ' | ' + {default_remark} "
     else:
         entry['remarks'] = default_remark
 
