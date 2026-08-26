@@ -181,14 +181,7 @@ def run_dialogue():
     # >>> Reducer [S. de Wet]:
     # (set reducer)
     # >>> Additional Remarks [None]:
-    # (Add at the start of Remarks field. 
-    # Default remark if Mookodi:
-    #  "The classification target was automatically sent for follow-up by the Virtual Research Assistant (Stevance et al. 2025).
-    #   Observations were programatically triggered using the ATLAS API Client (Stevance et al. 2026) 
-    #   and the SAAO Intelligent Observatory framework (Erasmus et al. 2024, Erasmus et al. 2025)"
-    # Default remark for SALT:
-    #   "The classification target was automatically flagged for follow-up by the Virtual Research Assistant (Stevance et al. 2025),
-    #    while observations with SALT were manually scheduled."
+    # (To Go in Top level remarks)
     """
 
     # ############## #
@@ -275,7 +268,20 @@ def run_dialogue():
     # 4. OBS DATE
     # ############### #
     today = datetime.now().strftime('%Y-%m-%d')
-    entry['spectra']['0']['obsdate'] = _prompt("Obs. Date", today)
+    obsdate = None
+    while obsdate is None:
+        candidate = _prompt("Obs. Date (UT), format YYYY-MM-DD or YYYY-MM-DD HH:MM:SS", today)
+        candidate = candidate.strip().strip('\'"')
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+            try:
+                datetime.strptime(candidate, fmt)
+                obsdate = candidate
+                break
+            except ValueError:
+                continue
+        if obsdate is None:
+            print("Could not parse date. Expected format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (UT). Try again.")
+    entry['spectra']['0']['obsdate'] = obsdate
 
     # ############### #
     # 5. REDSHIFT
@@ -292,17 +298,18 @@ def run_dialogue():
     # ############### #
     entry['spectra']['0']['reducer'] = _prompt("Reducer", "S. de Wet")
 
-    # Observer None by default
-    entry['spectra']['0']['observer'] = "None"
+    # ############### #
+    # +. OBSERVERS ADDED
+    # ############### #
+    entry['spectra']['0']['observer'] = _prompt("Observer", "N. Erasmus, S. Potter, C. van Gend, H. Worters, P. Rabe (all SAAO)") or ""
 
     # ############### #
     # 8. REMARKS
     # ############### #
+    entry['spectra']['0']['remarks'] = default_remark
+
     extra_remarks = _prompt("Additional Remarks", "None")
-    if extra_remarks and extra_remarks != "None":
-        entry['remarks'] = f"{extra_remarks}+ ' | ' + {default_remark} "
-    else:
-        entry['remarks'] = default_remark
+    entry['remarks'] = extra_remarks if extra_remarks and extra_remarks != "None" else ""
 
     # ############### #
     # 9. FILES
