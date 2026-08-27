@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS slack_messages (
     note          TEXT,
     message_time  TEXT,
     timestamp     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    list_removed_at TEXT,  -- CLAUDE EDIT - PLEASE REVIEW: added, was referenced by db.py but missing here
     -- HFS: slack timestamp can correspond to several atlas IDs when 
     --      Nic reports several in a row. ATLAS ID also not unique
     --      because a same ID will have status evolution. 
