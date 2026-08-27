@@ -17,10 +17,12 @@ logging.basicConfig(
 # Maps the name of the lists in the db (keys) to the name of lists
 # recognised by atlasapiclient (values)
 # NOTE: will need updating when/if we start using salt list again
+# CLAUDE EDIT - PLEASE REVIEW: added SALT mapping for issue #30 (2026-08-27)
 RELATED_LIST_TO_LIST_NAME = {
     '100Mpc Southern Transients': 'south_transients_100mpc',
     'Bright 100Mpc Southern Transients': 'bright_south_transients_100mpc',
     'Southern Transients at Peak': 'south_transients_peak',
+    'SALT': 'salt',
 }
 
 # Maps the atlasapiclent list names to the names of the 
