@@ -1,8 +1,6 @@
 # Claude wrote this for Goal 2 - SALT list wizard (2026-06-26)
 # HFS Major refactor, comments and docstrings (2026-06-26)
-# CLAUDE EDIT - PLEASE REVIEW: revived for issue #30 (2026-08-27) - new input
-# sources, dropped VRA/sherlock/detection_list_id gating, added freshness and
-# w-filter checks, added removed-bookkeeping exclusion
+
 
 from datetime import datetime
 import numpy as np
@@ -16,6 +14,7 @@ import atlas_sao.db as db
 SALT_DEC_MAX = 10.0
 SALT_FRESHNESS_DAYS = 7
 SALT_NONDET_CLUSTER_MIN = 2
+SALT_MAX_SPAN_DAYS = 7  # CLAUDE EDIT - PLEASE REVIEW: added 2026-08-27, drop objects whose detections span more than this
 MJD_EPOCH = datetime(1858, 11, 17)
 
 ### LOGGING SET UP
@@ -95,6 +94,15 @@ def has_recent_nondetection(entry,
     return (_current_mjd() - most_recent_night_mjd) <= N_days
 
 
+def is_not_too_old(entry, N_span_days=SALT_MAX_SPAN_DAYS):
+    """Check if old! Checks that our lightcurve (the actual detections) don't span too many days"""
+    lc = entry.get('lc', [])
+    if not lc:
+        return False
+    mjds = [point['mjd'] for point in lc]
+    return (max(mjds) - min(mjds)) <= N_span_days
+
+
 def has_non_w_detection(entry):
     """Check if our detections are exclusively w band"""
     # NOTE: HFS 2026-08-27: I can see where that could fail. If we have a spurious
@@ -108,7 +116,8 @@ def has_non_w_detection(entry):
 def should_add_to_salt(entry,
                         dec_max=SALT_DEC_MAX,
                         N_days=SALT_FRESHNESS_DAYS,
-                        N_nondet_min=SALT_NONDET_CLUSTER_MIN):
+                        N_nondet_min=SALT_NONDET_CLUSTER_MIN,
+                        N_span_days=SALT_MAX_SPAN_DAYS):
     """Decides if an alert meets requirements to be added to SALT list
 
     You can change the logic here without having to re-write the `fill_up` function.
@@ -147,7 +156,10 @@ def should_add_to_salt(entry,
     
     if not has_non_w_detection(entry):
         return False
-    
+
+    if not is_not_too_old(entry, N_span_days=N_span_days):
+        return False
+
     return True
 
 
@@ -184,7 +196,8 @@ def _fetch_custom_list_ids(objectgroupid):
 
 
 def clean_up(N_days=SALT_FRESHNESS_DAYS,
-             N_nondet_min=SALT_NONDET_CLUSTER_MIN):
+             N_nondet_min=SALT_NONDET_CLUSTER_MIN,
+             N_span_days=SALT_MAX_SPAN_DAYS):
     """Finds ATLAS IDs to be cleaned up from SALT list (classified, garbage, or stale)
 
     Returns
@@ -229,10 +242,13 @@ def clean_up(N_days=SALT_FRESHNESS_DAYS,
                 if classification is not None or detection_list_id in (0, 5, 11):  
                     to_remove.append(atlas_id)
 
-                # If latest non detections too old, not ineteresting to us. 
-                elif not has_recent_nondetection(entry, 
+                # If latest non detections too old, not ineteresting to us.
+                elif not has_recent_nondetection(entry,
                                                  N_days=N_days,
                                                 N_nondet_min=N_nondet_min):
+                    to_remove.append(atlas_id)
+                # Check that the lightcurve is not too old 
+                elif not is_not_too_old(entry, N_span_days=N_span_days):
                     to_remove.append(atlas_id)
 
             except Exception:
@@ -248,6 +264,7 @@ def clean_up(N_days=SALT_FRESHNESS_DAYS,
 def fill_up(dec_max=SALT_DEC_MAX,
             N_days=SALT_FRESHNESS_DAYS,
             N_nondet_min=SALT_NONDET_CLUSTER_MIN,
+            N_span_days=SALT_MAX_SPAN_DAYS,
             db_path=None):
     """Finds ATLAS IDs to be added to the SALT List.
 
@@ -293,7 +310,7 @@ def fill_up(dec_max=SALT_DEC_MAX,
             logging.info("Requesting source data for SALT candidates...")
             multi_data = ac.RequestMultipleSourceData(
                 array_ids=candidate_ids,
-                mjdthreshold=60_500,
+                mjdthreshold=61_000,
                 chunk_size=25
             )
             multi_data.chunk_get_response_quiet()
@@ -308,9 +325,10 @@ def fill_up(dec_max=SALT_DEC_MAX,
             try:
                 #  CALLING SPECIAL FUNCTION WHERE ADDING LOGIC LIVES
                 # ################################################## #
-                if should_add_to_salt(entry, dec_max=dec_max, 
+                if should_add_to_salt(entry, dec_max=dec_max,
                                       N_days=N_days,
-                                      N_nondet_min=N_nondet_min):
+                                      N_nondet_min=N_nondet_min,
+                                      N_span_days=N_span_days):
                     atlas_id = entry['object']['id']
                     to_add.append(atlas_id)
                     vra_scores[str(atlas_id)] = entry['object'].get('vra')

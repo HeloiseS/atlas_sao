@@ -78,6 +78,26 @@ class TestHasNonWDetection:
         assert slw.has_non_w_detection(entry) is False
 
 
+class TestHasShortDetectionSpan:
+    def test_passes_short_span(self):
+        now = slw._current_mjd()
+        entry = make_entry(lc=[{'mjd': now}, {'mjd': now - 2}])
+        assert slw.is_not_too_old(entry) is True
+
+    def test_fails_long_span(self):
+        now = slw._current_mjd()
+        entry = make_entry(lc=[{'mjd': now}, {'mjd': now - 10}])
+        assert slw.is_not_too_old(entry) is False
+
+    def test_single_detection_passes(self):
+        entry = make_entry(lc=[{'mjd': slw._current_mjd()}])
+        assert slw.is_not_too_old(entry) is True
+
+    def test_fails_when_no_detections(self):
+        entry = make_entry(lc=[])
+        assert slw.is_not_too_old(entry) is False
+
+
 class TestShouldAddToSalt:
     def test_passes_all_conditions(self):
         assert slw.should_add_to_salt(make_entry()) is True
@@ -94,6 +114,11 @@ class TestShouldAddToSalt:
 
     def test_fails_stale(self):
         assert slw.should_add_to_salt(make_entry(lcnondets=stale_cluster())) is False
+
+    def test_fails_long_detection_span(self):
+        now = slw._current_mjd()
+        entry = make_entry(lc=[{'filter': 'o', 'mjd': now}, {'filter': 'o', 'mjd': now - 10}])
+        assert slw.should_add_to_salt(entry) is False
 
     def test_fails_only_w_detections(self):
         entry = make_entry(lc=[{'filter': 'w'}])
@@ -187,6 +212,25 @@ def test_clean_up_removes_stale_members(mock_table, mock_multi):
 
     source_mock = MagicMock()
     source_mock.response_data = [make_entry(lcnondets=stale_cluster())]
+    mock_multi.return_value = source_mock
+
+    to_remove = slw.clean_up()
+
+    assert to_remove == ['1234567890123456789']
+
+
+@patch("atlas_sao.saltListWizard.ac.RequestMultipleSourceData")
+@patch("atlas_sao.saltListWizard.ac.RequestCustomListsTable")
+def test_clean_up_removes_long_span_members(mock_table, mock_multi):
+    mock_table.return_value.response_data = [
+        {'transient_object_id': '1234567890123456789', 'object_group_id': 14}
+    ]
+
+    now = slw._current_mjd()
+    source_mock = MagicMock()
+    source_mock.response_data = [
+        make_entry(lc=[{'filter': 'o', 'mjd': now}, {'filter': 'o', 'mjd': now - 10}])
+    ]
     mock_multi.return_value = source_mock
 
     to_remove = slw.clean_up()
